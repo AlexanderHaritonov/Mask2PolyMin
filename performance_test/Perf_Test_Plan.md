@@ -72,6 +72,8 @@ as RDP uses the L∞ tolerance, Polifit2D user L2 tolerance:
 
 For the first pass, set `segment_tolerance = global_tolerance = min_split_improvement = tolerance`. Studying the three knobs as orthogonal axes is a separate experiment.
 
+The √2 mapping is a starting point. After the first sweep, verify both algorithms' Hausdorff ranges overlap on the plot; if not, extend the tolerance schedule at the under-covered end and re-run.
+
 ## Datasets
 
 Use real segmentation masks, not synthetic. Three options, in order of effort:
@@ -80,7 +82,7 @@ Use real segmentation masks, not synthetic. Three options, in order of effort:
 - Free, no registration. Download: `http://images.cocodataset.org/zips/val2017.zip` (~1 GB) and `http://images.cocodataset.org/annotations/annotations_trainval2017.zip`.
 - Pull masks: `coco.annToMask(ann)` returns a binary mask. Run `skimage.measure.find_contours` on it to get the input contour for the fitter.
 - Filter: keep masks with ≥ 200 contour points (otherwise the simplification problem is trivial), single connected component, no holes for the first pass.
-- Sample size: 1000 masks across diverse categories is plenty for stable curves.
+- Sample size: 300 masks across diverse categories gives tight enough error bars for the comparison. Bump higher only if curves overlap.
 
 ### Tier 2 — published benchmark comparability: Cityscapes
 - Requires free registration at cityscapes-dataset.com.
@@ -90,7 +92,7 @@ Use real segmentation masks, not synthetic. Three options, in order of effort:
 ### Tier 3 — stress shapes: ADE20K
 - Free download. Broader category set; useful for finding pathological contours (very thin, many concavities). Skip unless Tier 1 results raise questions.
 
-Recommendation: start with **Tier 1 (COCO val2017, 1000 masks)**. Add Tier 2 only if publishing.
+Recommendation: start with **Tier 1 (COCO val2017, 300 masks)**. Add Tier 2 only if publishing.
 
 ## Coordinate convention
 
@@ -106,7 +108,7 @@ All polylines throughout the benchmark are in **(x, y) pixel space** (column, ro
 
 ## Sampling reproducibility
 
-The 1000-contour sample must be deterministic. After filtering (≥ 200 contour points, single connected component, no holes), sort by COCO annotation ID and take the first 1000. This means the same set is used on every run without a random seed.
+The 300-contour sample must be deterministic. After filtering (≥ 200 contour points, single connected component, no holes), sort by COCO annotation ID and take the first 300. This means the same set is used on every run without a random seed.
 
 ## Implementation outline
 
@@ -129,17 +131,17 @@ performance_test/
 ```
 
 Sweep schedule (linear pixels):
-- **RDP `epsilon`**: `{0.5, 1.0, 1.5, 2.0, 3.0, 5.0, 8.0}`
-- **PolyFit2D `tolerance`**: `{0.35, 0.71, 1.06, 1.41, 2.12, 3.54, 5.66}`
+- **RDP `epsilon`**: `{0.5, 1.0, 2.0, 5.0, 8.0}`
+- **PolyFit2D `tolerance`**: `{0.35, 0.71, 1.41, 3.54, 5.66}`
 
-Each algorithm runs once per (contour, tolerance) for quality metrics. Wall time is measured separately with 3 warm-up calls followed by the min of 5 timed calls using `time.perf_counter()`, to avoid JIT/import noise and reduce timer granularity artefacts. Output row schema:
+Each algorithm runs once per (contour, tolerance). Wall time is the single `time.perf_counter()` wrap around that call; aggregation across hundreds of contours provides the noise rejection. Output row schema:
 
 ```
 contour_id, n_input_points, algorithm, tolerance,
 n_segments, hausdorff, iou, mean_dist, wall_time_ms
 ```
 
-Aggregate (mean, median, p95) across `contour_id` for each `(algorithm, tolerance)` pair → `summary.csv`.
+Aggregate (median, p25, p75, p95) across `contour_id` for each `(algorithm, tolerance)` pair → `summary.csv`.
 
 ## Build order
 
@@ -147,22 +149,15 @@ Aggregate (mean, median, p95) across `contour_id` for each `(algorithm, toleranc
 2. **`baselines.py`** — `rdp_opencv(contour, eps)` and `polyfit2d(contour, tol)` wrappers returning a uniform `(M, 2)` polyline.
 3. **Smoke test** — one synthetic noisy-circle contour, both algorithms at one tolerance each, print the metrics. Sanity check: at tolerance → 0, IoU should be ≥ 0.99 for both.
 4. **`fetch_coco.py` + `extract_contours.py`** — download once, cache contours as `.npz`. Filter: ≥ 200 and ≤ 2000 contour points, single connected component, no holes. The upper cap keeps wall-time statistics interpretable and prevents a handful of very large contours from dominating the timing results; contours above the cap are simply skipped (logged).
-5. **IoU noise-floor measurement** — run both algorithms at the tightest tolerance in the sweep on a few hundred contours and report median + p5/p95 IoU per algorithm. Even at tolerance → 0, IoU is not 1.0: rasterization is discrete (sub-pixel rounding, `cv2.fillPoly` vs `skimage.draw.polygon` edge-convention differences, the input mask itself being a re-rasterized polygon). The two algorithms produce systematically different polyline shapes (chord-clipped vs least-squares) and may hit boundary pixels differently, so they need *separate* floors. Why this matters:
-   - **Don't read noise as signal.** A 0.003 IoU gap between algorithms is meaningless if the floor is at the same scale.
-   - **Calibrate the segments-vs-IoU plot.** Above the floor, all algorithms look indistinguishable; the interesting comparisons happen below.
-   - **Detect per-algorithm bias** before the head-to-head comparison.
-
-   Output: two numbers (one per algorithm) saved alongside the results, used to annotate the plots and gate any "PolyFit2D wins on IoU" claim.
-6. **`run_benchmark.py`** — full sweep on cached contours. Each (contour, algorithm, tolerance) call is wrapped in a `try/except`; on any exception log `contour_id`, algorithm, tolerance, and the error message to `results/errors.log` and continue. Contours that fail for every algorithm at every tolerance are flagged for inspection but do not abort the run.
-7. **Tolerance-mapping check** — after the first sweep, before plotting, verify that the `ε ≈ √2 · tolerance` mapping holds empirically. The mapping is derived from a cosine residual model and could be off if real contour residuals differ (e.g., dominated by integer-grid quantization noise rather than arc bending). Procedure: bin (algorithm, tolerance) results by measured median Hausdorff and check that the two algorithms' curves overlay in `(Hausdorff, n_segments)` space — i.e., at any given Hausdorff value both algorithms have data points nearby. If one algorithm's curve consistently sits at a tighter or looser effective ε across the whole sweep, shift PolyFit2D's tolerance schedule by a multiplicative factor (e.g., × 1.2) and rerun. This is purely a sweep-alignment fix; it does not change the per-contour comparison logic.
-8. **`plot_results.py`** — three figures + summary table.
+5. **`run_benchmark.py`** — full sweep on cached contours. Each (contour, algorithm, tolerance) call is wrapped in a `try/except`; on any exception, print `contour_id`, algorithm, tolerance, and the error to stderr and continue. Contours that fail for every algorithm at every tolerance are flagged for inspection but do not abort the run.
+6. **`plot_results.py`** — three figures + summary table.
 
 ## Plots in the report
 
 Three figures, each with PolyFit2D and OpenCV-RDP curves (and Imai–Iri if implemented):
 
 1. **Segments vs. Hausdorff** — x: Hausdorff (px), y: median segment count. Shaded band: p25–p75. Lower-left is better.
-2. **Segments vs. IoU** — x: median segment count, y: median IoU. Upper-left is better. This is the headline figure for the area-preservation claim. Draw a horizontal dashed line per algorithm at its measured IoU noise floor (from step 5); label each line "RDP floor" / "PolyFit2D floor". Any IoU difference between algorithms that falls within the noise floor band must not be claimed as a win.
+2. **Segments vs. IoU** — x: median segment count, y: median IoU. Upper-left is better. This is the headline figure for the area-preservation claim. Draw a horizontal dashed line per algorithm at its median IoU at the tightest sweep tolerance — this is a per-algorithm noise floor (rasterization discreteness + algorithm-specific boundary-pixel behaviour mean the floor is not 1.0 and differs between methods). Any IoU difference between algorithms that falls within the noise-floor band must not be claimed as a win.
 3. **Wall time vs. contour length** — x: input-contour length (binned), y: median wall time per contour. Single tolerance (e.g. ε = 2.0). Two curves.
 
 Plus a small table of aggregate numbers at one canonical tolerance (ε = 2.0 px / `tolerance` ≈ 1.41 px):
