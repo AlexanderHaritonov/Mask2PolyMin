@@ -5,15 +5,55 @@ All polylines are (N, 2) float arrays in (x, y) pixel space.
 """
 import numpy as np
 import cv2
-from scipy.spatial.distance import directed_hausdorff
 
 
-def hausdorff(poly_a: np.ndarray, poly_b: np.ndarray) -> float:
-    """Symmetric Hausdorff distance in pixels between two polylines."""
-    return max(
-        directed_hausdorff(poly_a, poly_b)[0],
-        directed_hausdorff(poly_b, poly_a)[0],
-    )
+def hausdorff(poly_a: np.ndarray, poly_b: np.ndarray, sample_step: float = 1.0) -> float:
+    """Symmetric polyline-Hausdorff distance in pixels.
+
+    Treats both inputs as closed polylines (sequences of edges), not point
+    clouds: distance is point-to-edge, not point-to-point. The point-cloud
+    version (`scipy.spatial.distance.directed_hausdorff`) overestimates
+    badly when one polyline is sparse and the other dense, because dense-
+    contour points sitting between sparse vertices are far from any vertex
+    yet close to the edge between them.
+
+    Both polylines are densified to ≤ `sample_step` px between samples so
+    that the B→A direction sees edge midpoints of B, not only its vertices.
+    """
+    a_dense = _densify(poly_a, sample_step)
+    b_dense = _densify(poly_b, sample_step)
+    h_ab = float(_point_to_polyline_distances(a_dense, poly_b).max())
+    h_ba = float(_point_to_polyline_distances(b_dense, poly_a).max())
+    return max(h_ab, h_ba)
+
+
+def _densify(polyline: np.ndarray, max_step: float) -> np.ndarray:
+    """Insert points so adjacent samples are at most `max_step` px apart."""
+    out = [polyline[0]]
+    for i in range(len(polyline) - 1):
+        a, b = polyline[i], polyline[i + 1]
+        d = float(np.linalg.norm(b - a))
+        n = max(1, int(np.ceil(d / max_step)))
+        for k in range(1, n + 1):
+            out.append(a + (k / n) * (b - a))
+    return np.asarray(out, dtype=np.float64)
+
+
+def _point_to_polyline_distances(points: np.ndarray, polyline: np.ndarray) -> np.ndarray:
+    """Min distance from each point to the closed polyline's edges, vectorized.
+
+    points:   (Q, 2)
+    polyline: (M, 2) closed (first point equals last)
+    returns:  (Q,)
+    """
+    a = polyline[:-1]                                  # (E, 2)
+    ab = polyline[1:] - a                              # (E, 2)
+    ab_sq = np.maximum((ab * ab).sum(axis=1), 1e-12)   # (E,)
+    qa = points[:, None, :] - a[None, :, :]            # (Q, E, 2)
+    t = np.clip((qa * ab[None, :, :]).sum(axis=2) / ab_sq[None, :], 0.0, 1.0)
+    closest = a[None, :, :] + t[:, :, None] * ab[None, :, :]
+    diffs = points[:, None, :] - closest
+    return np.sqrt((diffs * diffs).sum(axis=2)).min(axis=1)
 
 
 def iou_rasterized(
