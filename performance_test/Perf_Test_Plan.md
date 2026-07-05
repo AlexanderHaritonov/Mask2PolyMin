@@ -17,19 +17,16 @@
 | **Hausdorff distance** (symmetric, in pixels) | Worst-case fidelity | densify both polylines, point-to-edge distances, take max |
 | **IoU** (rasterized polygon vs. original mask) | Area / corner preservation | rasterize fitted polygon → bitmap, compare with input mask |
 | **RMS perpendicular distance** (point → polyline) | Typical fidelity | per-point min distance to edges, RMS |
-| Time per contour | Speed | `time.perf_counter()` |
+| **Time per contour** | Speed | `time.perf_counter()` |
 
 Rasterization for IoU: `cv2.fillPoly`.
 
 ## Baselines
 
 ### Required: OpenCV `cv2.approxPolyDP` (RDP)
-Already installed (system Python). 
-
 ```python
 import cv2
 import numpy as np
-
 # skimage gives (row, col) float; cv2 wants (x, y) int32 with shape (N, 1, 2)
 pts = np.flip(contour, axis=1).astype(np.float32)
 pts_cv = pts.reshape(-1, 1, 2).astype(np.int32)
@@ -39,22 +36,13 @@ approx_xy = approx.reshape(-1, 2)  # (M, 2) in (x, y)
 
 `epsilon` is the Hausdorff tolerance in pixels. `closed=True` for closed contours.
 
-### Optional: Imai–Iri (exact min-# under Hausdorff)
-
-No trustworthy pip package known. If we want the optimality-gap number, write it ourselves — the DAG-shortest-path version is short:
-
-1. For each pair `(i, j)` with `i < j` (or wrapping for closed contours), check if the chord from point i to point j approximates the subarc `i..j` within ε. This is an O(n³) edge-feasibility scan; acceptable for benchmark contours of a few hundred points.
-2. BFS from vertex 0 to vertex n-1 over feasible edges → fewest-segments path.
-3. For closed contours: pick a starting vertex, run BFS, repeat for several start vertices and take the min, or solve the cyclic version directly.
-
-Defer this until after the RDP comparison is done. Only invest the day if the RDP results are promising and we want a "near-optimal" claim.
+### Optional: Imai–Iri?(exact min-# under Hausdorff)
+Defer this until after the RDP comparison is done.
 
 ## Tolerance alignment
+Two algorithms, two native tolerances. **native-tolerance / post-hoc-metric**: each algorithm runs on its own tolerance, then we measure the same downstream metrics (Hausdorff, IoU, mean distance).
 
-Two algorithms, two native tolerances. We use the **native-tolerance / post-hoc-metric** convention: each algorithm runs on its own tolerance, then we measure the same downstream metrics (Hausdorff, IoU, mean distance) and plot in shared metric space.
-
-The native tolerances are aligned via the cosine-residual model `ε_rdp ≈ √2 · segment_tolerance` to start the sweeps in roughly comparable regimes,
-as RDP uses the L∞ tolerance, Polifit2D user L2 tolerance:
+The native tolerances are aligned via the cosine-residual model `ε_rdp ≈ √2 · segment_tolerance` as RDP uses the L∞ tolerance, Polifit2D user L2 tolerance:
 
 | RDP `epsilon` (px) | PolyFit2D `tolerance` ≈ ε / √2 (px) |
 |---|---|
@@ -66,13 +54,11 @@ as RDP uses the L∞ tolerance, Polifit2D user L2 tolerance:
 | 5.0 | 3.54 |
 | 8.0 | 5.66 |
 
-For the first pass, set `segment_tolerance = global_tolerance = min_split_improvement = tolerance`. Studying the three knobs as orthogonal axes is a separate experiment.
-
-The √2 mapping is a starting point. After the first sweep, verify both algorithms' Hausdorff ranges overlap on the plot; if not, extend the tolerance schedule at the under-covered end and re-run.
+Test with `segment_tolerance = global_tolerance = min_split_improvement = tolerance`.
 
 ## Datasets
 
-Use real segmentation masks, not synthetic. Three options, in order of effort:
+Use real segmentation masks.
 
 ### Tier 1 — quick start: COCO val2017 instance masks
 - Free, no registration. Download: `http://images.cocodataset.org/zips/val2017.zip` (~1 GB) and `http://images.cocodataset.org/annotations/annotations_trainval2017.zip`.
@@ -87,8 +73,6 @@ Use real segmentation masks, not synthetic. Three options, in order of effort:
 
 ### Tier 3 — stress shapes: ADE20K
 - Free download. Broader category set; useful for finding pathological contours (very thin, many concavities). Skip unless Tier 1 results raise questions.
-
-Recommendation: start with **Tier 1 (COCO val2017, 300 masks)**. Add Tier 2 only if publishing.
 
 ## Coordinate convention
 

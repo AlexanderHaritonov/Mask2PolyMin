@@ -78,7 +78,7 @@ def _intersect_lines(p1, d1, p2, d2, fallback_a, fallback_b) -> np.ndarray:
 if __name__ == "__main__":
     import math
     import time
-    from performance_test.metrics import hausdorff, iou_rasterized, mean_distance
+    from performance_test.metrics import hausdorff, iou_rasterized, rms_distance
 
     # Noisy circle, radius 50, centre (150, 150), 500 points, sub-pixel jitter.
     N = 500
@@ -111,14 +111,14 @@ if __name__ == "__main__":
     pf_poly = polyfit2d(contour_closed, tol)
     t_pf = (time.perf_counter() - t0) * 1000
 
-    print(f"{'algorithm':<12} {'tol':>5} {'#segs':>6} {'hausdorff':>10} {'IoU':>8} {'mean_d':>8} {'ms':>7}")
+    print(f"{'algorithm':<12} {'tol':>5} {'#segs':>6} {'hausdorff':>10} {'IoU':>8} {'rms_d':>8} {'ms':>7}")
     for name, poly, t, used_tol in [
         ("RDP",       rdp_poly, t_rdp, eps),
         ("PolyFit2D", pf_poly,  t_pf,  tol),
     ]:
         h = hausdorff(contour_closed, poly)
         iou = iou_rasterized(poly, mask)
-        md = mean_distance(contour_closed, poly)
+        md = rms_distance(contour_closed, poly)
         # poly closed → segment count is len-1
         n_seg = len(poly) - 1
         print(f"{name:<12} {used_tol:>5.2f} {n_seg:>6d} {h:>10.4f} {iou:>8.4f} {md:>8.4f} {t:>7.2f}")
