@@ -1,9 +1,9 @@
 import numpy as np
 from dataclasses import dataclass
 
-from src.fit_line_segment import fit_line_segment
-from src.line_segment_params import LineSegmentParams
-from src.sequence_segment import SequenceSegment, subsequence
+from mask2polymin.fit_line_segment import fit_line_segment
+from mask2polymin.line_segment_params import LineSegmentParams
+from mask2polymin.sequence_segment import SequenceSegment, subsequence
 
 PLOT_SEGMENTS = False
 
@@ -74,7 +74,7 @@ class FitterToPointsSequence:
             new_sse_per_segment = self.adjust_segmentation(segmentation_after_split, index_of_segment_to_split)
             if self.config.verbose: print(f"sse per segment: {new_sse_per_segment}")
             if self.config.verbose and PLOT_SEGMENTS:
-                from src.plotting import plot_segments
+                from mask2polymin.plotting import plot_segments
                 plot_segments(segmentation_after_split)
 
             if new_sse_per_segment < self.config.tolerance_sq:

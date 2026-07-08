@@ -1,4 +1,4 @@
-# PolyFit2D
+# Mask2PolyMin
 Given a dense polygon, fit a polyline with a minimal number of segments.
 Useful for post‑processing bitmask segmentation outputs from models such as MaskRCNN or YOLO‑Seg, especially when regular or low‑complexity shapes are required:
 - constructing larger structures by matching edges
@@ -17,7 +17,7 @@ python -m venv .venv && source .venv/bin/activate && pip install -r requirements
 ![input bitmask](step1_bitmap.png)
 - A contour is extracted from the bitmask using skimage.measure.find_contours.
 ![extracted contour](step2_contour.png)
-- PolyFit2D fits a minimal‑segment polyline to this contour.
+- Mask2PolyMin fits a minimal‑segment polyline to this contour.
 ![fitted segments](step3_fitted_segments.png)
 - `segments_to_polyline(segments, is_closed=True)` converts the fitted segments to a closed polygon of float (sub-pixel) vertices, ready for GeoJSON/SVG/COCO export.
 

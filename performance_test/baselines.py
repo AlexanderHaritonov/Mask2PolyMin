@@ -1,5 +1,5 @@
 """
-Algorithm wrappers for the PolyFit2D benchmark.
+Algorithm wrappers for the Mask2PolyMin benchmark.
 
 Both wrappers obey the same contract:
     contour: (N, 2) float array in (x, y), first point equals last point (closed).
@@ -7,13 +7,13 @@ Both wrappers obey the same contract:
 
 Tolerances are in linear pixels.
 - rdp_opencv:  epsilon = L∞ Hausdorff bound (cv2 native).
-- polyfit2d:   tolerance = RMS perpendicular distance bound (PolyFit2D native).
+- mask2polymin:   tolerance = RMS perpendicular distance bound (Mask2PolyMin native).
 """
 import numpy as np
 import cv2
 
-from src.fit_to_points_sequence import FitterToPointsSequence, FitterConfig
-from src.polyline import segments_to_polyline
+from mask2polymin.fit_to_points_sequence import FitterToPointsSequence, FitterConfig
+from mask2polymin.polyline import segments_to_polyline
 
 
 def rdp_opencv(contour: np.ndarray, epsilon: float) -> np.ndarray:
@@ -27,8 +27,8 @@ def rdp_opencv(contour: np.ndarray, epsilon: float) -> np.ndarray:
     return poly
 
 
-def polyfit2d(contour: np.ndarray, tolerance: float) -> np.ndarray:
-    """PolyFit2D fitter. Returns closed polyline of fitted-line intersections.
+def mask2polymin(contour: np.ndarray, tolerance: float) -> np.ndarray:
+    """Mask2PolyMin fitter. Returns closed polyline of fitted-line intersections.
 
     max_segments_count is set to len(contour) so the default cap of 30 cannot
     silently truncate tight-tolerance sweeps; fairness with RDP, which has no
@@ -75,13 +75,13 @@ if __name__ == "__main__":
     t_rdp = (time.perf_counter() - t0) * 1000
 
     t0 = time.perf_counter()
-    pf_poly = polyfit2d(contour_closed, tol)
-    t_pf = (time.perf_counter() - t0) * 1000
+    m2p_poly = mask2polymin(contour_closed, tol)
+    t_m2p = (time.perf_counter() - t0) * 1000
 
     print(f"{'algorithm':<12} {'tol':>5} {'#segs':>6} {'hausdorff':>10} {'IoU':>8} {'rms_d':>8} {'ms':>7}")
     for name, poly, t, used_tol in [
         ("RDP",       rdp_poly, t_rdp, eps),
-        ("PolyFit2D", pf_poly,  t_pf,  tol),
+        ("Mask2PolyMin", m2p_poly,  t_m2p,  tol),
     ]:
         h = hausdorff(contour_closed, poly)
         iou = iou_rasterized(poly, mask)
@@ -94,22 +94,22 @@ if __name__ == "__main__":
     # Per the plan, step 5 (IoU noise-floor measurement) is what calibrates
     # per-algorithm floors. The two algorithms differ qualitatively here:
     #   - RDP picks subset vertices; tight ε drives it toward N-vertex retention.
-    #   - PolyFit2D fits least-squares lines and stops when splits no longer
+    #   - Mask2PolyMin fits least-squares lines and stops when splits no longer
     #     improve the fit by ~tolerance² of SSE per segment, so on a noisy
     #     circle it converges to a smooth fit, not the input.
     # We print both floors for visual inspection but only assert wrappers work.
     print("\nTight-tolerance behaviour (algorithm-specific floors expected):")
     rdp_tight = rdp_opencv(contour_closed, 0.1)
-    pf_tight = polyfit2d(contour_closed, 0.1)
+    m2p_tight = mask2polymin(contour_closed, 0.1)
     iou_rdp_tight = iou_rasterized(rdp_tight, mask)
-    iou_pf_tight = iou_rasterized(pf_tight, mask)
-    print(f"  RDP       eps=0.1: IoU = {iou_rdp_tight:.4f}  ({len(rdp_tight) - 1} segs)")
-    print(f"  PolyFit2D tol=0.1: IoU = {iou_pf_tight:.4f}  ({len(pf_tight) - 1} segs)")
+    iou_m2p_tight = iou_rasterized(m2p_tight, mask)
+    print(f"  RDP          eps=0.1: IoU = {iou_rdp_tight:.4f}  ({len(rdp_tight) - 1} segs)")
+    print(f"  Mask2PolyMin tol=0.1: IoU = {iou_m2p_tight:.4f}  ({len(m2p_tight) - 1} segs)")
 
     # --- wrapper contract: closed, sane IoU at the matched-tolerance pair ---
     assert np.array_equal(rdp_poly[0], rdp_poly[-1]), "RDP polyline not closed"
-    assert np.array_equal(pf_poly[0], pf_poly[-1]), "PolyFit2D polyline not closed"
+    assert np.array_equal(m2p_poly[0], m2p_poly[-1]), "Mask2PolyMin polyline not closed"
     assert iou_rasterized(rdp_poly, mask) > 0.95, "RDP basic IoU too low"
-    assert iou_rasterized(pf_poly, mask) > 0.95, "PolyFit2D basic IoU too low"
+    assert iou_rasterized(m2p_poly, mask) > 0.95, "Mask2PolyMin basic IoU too low"
 
     print("\nSmoke test passed.")

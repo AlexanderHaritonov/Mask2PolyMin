@@ -1,8 +1,8 @@
 import numpy as np
 import pytest
-from src.sequence_segment import SequenceSegment
-from src.fit_line_segment import fit_line_segment
-from src.fit_to_points_sequence import FitterToPointsSequence
+from mask2polymin.sequence_segment import SequenceSegment
+from mask2polymin.fit_line_segment import fit_line_segment
+from mask2polymin.fit_to_points_sequence import FitterToPointsSequence
 
 def make_segment(seq, first, last):
     if last > first:

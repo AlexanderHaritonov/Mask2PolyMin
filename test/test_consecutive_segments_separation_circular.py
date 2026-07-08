@@ -1,8 +1,8 @@
 import numpy as np
 import pytest
-from src.line_segment_params import LineSegmentParams
-from src.sequence_segment import SequenceSegment
-from src.fit_to_points_sequence import FitterToPointsSequence
+from mask2polymin.line_segment_params import LineSegmentParams
+from mask2polymin.sequence_segment import SequenceSegment
+from mask2polymin.fit_to_points_sequence import FitterToPointsSequence
 
 def make_line_segment(whole_sequence: np.ndarray, i_start: int, i_end: int) -> LineSegmentParams:
     start = whole_sequence[i_start].astype(np.float64)

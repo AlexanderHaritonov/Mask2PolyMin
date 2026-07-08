@@ -7,9 +7,9 @@ from skimage import measure
 import matplotlib.pyplot as plt
 import time
 
-from src.fit_to_points_sequence import FitterToPointsSequence, FitterConfig
-from src.plotting import show_fitted_polygon
-from src.sequence_segment import print_segments_info
+from mask2polymin.fit_to_points_sequence import FitterToPointsSequence, FitterConfig
+from mask2polymin.plotting import show_fitted_polygon
+from mask2polymin.sequence_segment import print_segments_info
 
 
 # Step 1: Create a simple test bitmap (or load your own image)

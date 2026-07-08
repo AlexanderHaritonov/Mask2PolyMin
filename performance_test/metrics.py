@@ -1,5 +1,5 @@
 """
-Primary quality metrics for the PolyFit2D benchmark.
+Primary quality metrics for the Mask2PolyMin benchmark.
 
 All polylines are (N, 2) float arrays in (x, y) pixel space.
 """

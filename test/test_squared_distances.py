@@ -1,6 +1,6 @@
 import numpy as np
 import pytest
-from src.line_segment_params import LineSegmentParams
+from mask2polymin.line_segment_params import LineSegmentParams
 
 class TestSquaredDistancesToLine:
 

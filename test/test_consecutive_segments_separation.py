@@ -2,9 +2,9 @@
 
 import numpy as np
 import pytest
-from src.line_segment_params import LineSegmentParams
-from src.sequence_segment import SequenceSegment
-from src.fit_to_points_sequence import FitterToPointsSequence
+from mask2polymin.line_segment_params import LineSegmentParams
+from mask2polymin.sequence_segment import SequenceSegment
+from mask2polymin.fit_to_points_sequence import FitterToPointsSequence
 
 
 def test_horizontal_then_vertical():

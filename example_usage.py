@@ -1,9 +1,9 @@
 import numpy as np
 from skimage import measure
 
-from src.fit_to_points_sequence import FitterToPointsSequence
-from src.plotting import show_fitted_polygon
-from src.polyline import segments_to_polyline
+from mask2polymin.fit_to_points_sequence import FitterToPointsSequence
+from mask2polymin.plotting import show_fitted_polygon
+from mask2polymin.polyline import segments_to_polyline
 
 """Create a small bitmap with a simple shape"""
 bitmap = np.zeros((100, 100), dtype=np.uint8)

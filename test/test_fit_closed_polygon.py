@@ -1,7 +1,7 @@
 import numpy as np
-from src.fit_to_points_sequence import FitterToPointsSequence, FitterConfig
-from src.sequence_segment import print_segments_info
-from src.plotting import plot_segments
+from mask2polymin.fit_to_points_sequence import FitterToPointsSequence, FitterConfig
+from mask2polymin.sequence_segment import print_segments_info
+from mask2polymin.plotting import plot_segments
 
 
 def test_fit_closed_polygon_four_segments():

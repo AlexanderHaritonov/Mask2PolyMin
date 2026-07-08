@@ -1,15 +1,15 @@
-# PolyFit2D — Performance & Quality Benchmark Plan
+# Mask2PolyMin — Performance & Quality Benchmark Plan
 
 ## Goal
 
 Produce evidence for:
 
-1. PolyFit2D yields far fewer segments with comparable accuracy (IoU, RMS, Hausdorff not much worse than RDP).
-2. PolyFit2D preserves area and corners (no shrinkage, no rounding) better, especially on noisy masks from segmentation nets.
+1. Mask2PolyMin yields far fewer segments with comparable accuracy (IoU, RMS, Hausdorff not much worse than RDP).
+2. Mask2PolyMin preserves area and corners (no shrinkage, no rounding) better, especially on noisy masks from segmentation nets.
 
 Secondary: compare runtime against `cv2.approxPolyDP` across contour lengths.
 
-Note: "equivalent fidelity" is not a realistic target — PolyFit2D least-squares-fits and smooths noise, so its Hausdorff to the *noisy input contour* reads systematically higher than RDP's. On noisy masks the reference for fidelity metrics is the **ground-truth shape**, not the input contour.
+Note: "equivalent fidelity" is not a realistic target — Mask2PolyMin least-squares-fits and smooths noise, so its Hausdorff to the *noisy input contour* reads systematically higher than RDP's. On noisy masks the reference for fidelity metrics is the **ground-truth shape**, not the input contour.
 
 ## Metrics
 
@@ -34,11 +34,11 @@ Corner metrics require ground-truth corners → Tier 0 only. IoU alone is not a 
 
 ## Tolerance alignment
 
-Each algorithm runs on its native tolerance (RDP: L∞, PolyFit2D: L2/RMS); metrics are compared post hoc in shared metric space. Starting alignment `ε_rdp ≈ √2 · tolerance`:
+Each algorithm runs on its native tolerance (RDP: L∞, Mask2PolyMin: L2/RMS); metrics are compared post hoc in shared metric space. Starting alignment `ε_rdp ≈ √2 · tolerance`:
 
 | RDP `epsilon` (px) | 0.5 | 1.0 | 2.0 | 5.0 | 8.0 |
 |---|---|---|---|---|---|
-| PolyFit2D `tolerance` | 0.35 | 0.71 | 1.41 | 3.54 | 5.66 |
+| Mask2PolyMin `tolerance` | 0.35 | 0.71 | 1.41 | 3.54 | 5.66 |
 
 Set `segment_tolerance = global_tolerance = min_split_improvement = tolerance`. If the metric ranges don't overlap after the first sweep, extend the schedule.
 
@@ -52,7 +52,7 @@ The core benchmark for the corner/area claims.
 3. Extract the contour of the distorted mask, feed to both algorithms.
 4. Compute all metrics against the **GT polygon / GT mask**, not the distorted one.
 
-Cheap, controlled, and where "preserves corners, no shrinkage" is actually demonstrable: RDP must pick vertices from the noisy boundary; PolyFit2D averages the noise away.
+Cheap, controlled, and where "preserves corners, no shrinkage" is actually demonstrable: RDP must pick vertices from the noisy boundary; Mask2PolyMin averages the noise away.
 
 ### Tier 1 — real masks: COCO val2017
 - Download `val2017.zip` (~1 GB) + `annotations_trainval2017.zip`; masks via `coco.annToMask`, contours via `skimage.measure.find_contours`.
@@ -74,7 +74,7 @@ Code in [performance_test/](.). Gitignore `data/` and `results/`.
 
 ```
 metrics.py               # hausdorff, iou_rasterized, rms_distance, corner metrics   [done except corners]
-baselines.py             # rdp_opencv, polyfit2d wrappers + smoke test               [done]
+baselines.py             # rdp_opencv, mask2polymin wrappers + smoke test               [done]
 synth_shapes.py          # Tier 0: GT polygons + mask distortion
 fetch_coco.py            # Tier 1: download + cache
 extract_contours.py      # Tier 1: masks → filtered contours (.npz)
@@ -110,4 +110,4 @@ Plus a table at the canonical tolerance (ε = 2.0 / tol = 1.41): median #segs, I
 
 ## Report
 
-Append a "Benchmarks" section to [../README.md](../README.md): setup paragraph, the figures, the table, one paragraph of honest interpretation (where PolyFit2D wins and where it doesn't), link here for reproducibility.
+Append a "Benchmarks" section to [../README.md](../README.md): setup paragraph, the figures, the table, one paragraph of honest interpretation (where Mask2PolyMin wins and where it doesn't), link here for reproducibility.

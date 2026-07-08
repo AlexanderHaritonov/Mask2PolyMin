@@ -2,8 +2,8 @@ import numpy as np
 from dataclasses import dataclass
 from typing import Optional
 
-from src.line_segment_params import LineSegmentParams
-from src.fit_line_segment import fit_line_segment
+from mask2polymin.line_segment_params import LineSegmentParams
+from mask2polymin.fit_line_segment import fit_line_segment
 
 @dataclass
 class SequenceSegment:

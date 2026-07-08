@@ -1,7 +1,7 @@
 import numpy as np
 from matplotlib import pyplot as plt
 
-from src.sequence_segment import SequenceSegment
+from mask2polymin.sequence_segment import SequenceSegment
 
 def show_fitted_polygon(bitmap, contour, segments, filename=None):
     plt.figure(figsize=(10, 8))

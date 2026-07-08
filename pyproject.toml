@@ -1,0 +1,13 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mask2polymin"
+version = "0.1.0"
+description = "Fit a polyline with a minimal number of segments to a dense contour, e.g. from bitmask segmentation outputs"
+requires-python = ">=3.10"
+dependencies = ["numpy"]
+
+[tool.setuptools]
+packages = ["mask2polymin"]
