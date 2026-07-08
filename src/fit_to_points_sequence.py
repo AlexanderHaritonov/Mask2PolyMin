@@ -11,29 +11,20 @@ PLOT_SEGMENTS = False
 class FitterConfig:
     max_segments_count: int = 30
     max_adjust_iterations: int = 20
-    # All tolerances are in pixels (linear), with RootMeanSquare-of-perpendicular-distance semantics.
-    # Squared internally for L2 comparisons.
-    # tolerance: the three specifics below default to it when None.
-    # segment_tolerance: per-segment bound — gates split and merge.
-    # global_tolerance:  aggregate-fit overall stop criterion.
-    # min_split_improvement: required drop per split.
-    tolerance: float = 1.4
-    segment_tolerance: float | None = None
-    global_tolerance: float | None = None
-    min_split_improvement: float | None = None
+    # Max allowed deviation in pixels (perpendicular distance to the fitted line).
+    # tolerance_sq gates everything:
+    #   - split eligibility and collinear merge: a segment's mean and max
+    #     squared point distance must stay within it;
+    #   - global stop: the average SSE per segment must stay within it,
+    #     i.e. each segment gets a budget of ~one tolerance-sized outlier;
+    #   - improvement: each split must reduce that SSE by at least one
+    #     outlier's worth, else the fitter gives up.
+    tolerance: float = 1.0
     verbose: bool = False
 
     def __post_init__(self):
-        if self.segment_tolerance is None:
-            self.segment_tolerance = self.tolerance
-        if self.global_tolerance is None:
-            self.global_tolerance = self.tolerance
-        if self.min_split_improvement is None:
-            self.min_split_improvement = self.tolerance
-        # squared forms used internally for L2 comparisons
-        self.segment_tolerance_sq = self.segment_tolerance ** 2
-        self.global_tolerance_sq = self.global_tolerance ** 2
-        self.min_split_improvement_sq = self.min_split_improvement ** 2
+        # squared form used internally for L2 comparisons
+        self.tolerance_sq = self.tolerance ** 2
 
 class FitterToPointsSequence:
     def __init__(self,
@@ -62,16 +53,14 @@ class FitterToPointsSequence:
             line_segment_params=segment_params)
         segments = [initial_segment]
 
-        variance = segment_params.loss
-        if variance < self.config.global_tolerance_sq:
+        sse_per_segment = segment_params.loss  # single segment: total SSE == SSE per segment
+        if sse_per_segment < self.config.tolerance_sq:
             return segments
 
         while True:
             if len(segments) >= self.config.max_segments_count:
                 if self.config.verbose: print("Max segments count reached. Exiting.")
                 return segments
-
-            #variance = sum(s.line_segment_params.loss for s in segments) / len(segments)
 
             index_of_segment_to_split = self.choose_segment_index_for_split(segments)
             if index_of_segment_to_split is None:
@@ -82,22 +71,22 @@ class FitterToPointsSequence:
 
             segmentation_after_split = self.split_segment(segments, index_of_segment_to_split)
 
-            new_variance = self.adjust_segmentation(segmentation_after_split, index_of_segment_to_split)
-            if self.config.verbose: print(f"variance: {new_variance}")
+            new_sse_per_segment = self.adjust_segmentation(segmentation_after_split, index_of_segment_to_split)
+            if self.config.verbose: print(f"sse per segment: {new_sse_per_segment}")
             if self.config.verbose and PLOT_SEGMENTS:
                 from src.plotting import plot_segments
                 plot_segments(segmentation_after_split)
 
-            if new_variance < self.config.global_tolerance_sq:
-                if self.config.verbose: print(f"Breaking up at {len(segmentation_after_split)} because variance is less than global_tolerance.")
+            if new_sse_per_segment < self.config.tolerance_sq:
+                if self.config.verbose: print(f"Breaking up at {len(segmentation_after_split)} because sse per segment is within tolerance.")
                 return segmentation_after_split
 
-            if new_variance > variance - self.config.min_split_improvement_sq:
+            if new_sse_per_segment > sse_per_segment - self.config.tolerance_sq:
                 if self.config.verbose: print("Breaking up because of no improvement at", len(segments), "segments.")
                 return segments
 
             segments = segmentation_after_split
-            variance = new_variance
+            sse_per_segment = new_sse_per_segment
 
     def _merge_collinear_segments(self, segments: list[SequenceSegment]) -> list[SequenceSegment]:
         # single-pass index walk,
@@ -116,7 +105,7 @@ class FitterToPointsSequence:
                 continue
             combined = subsequence(self.whole_sequence, a.first_index, b.last_index)
             combined_fit = fit_line_segment(combined)
-            if combined_fit.loss / len(combined) <= self.config.segment_tolerance_sq:
+            if combined_fit.loss / len(combined) <= self.config.tolerance_sq:
                 # do the merge
                 merged = SequenceSegment(
                     whole_sequence=self.whole_sequence,
@@ -138,13 +127,13 @@ class FitterToPointsSequence:
         def needs_split(segment: SequenceSegment) -> bool:
             if segment.points_count() <= 3:
                 return False
-            if segment.line_segment_params.loss / segment.points_count() > self.config.segment_tolerance_sq:
+            if segment.line_segment_params.loss / segment.points_count() > self.config.tolerance_sq:
                 return True
             # The mean-based check alone lets a long segment absorb a few far-off
             # points around a corner, so also split when any single point is
-            # farther than segment_tolerance from the fitted line.
+            # farther than tolerance from the fitted line.
             points = self.subsequence(segment.first_index, segment.last_index)
-            return segment.line_segment_params.squared_distances_to_line(points).max() > self.config.segment_tolerance_sq
+            return segment.line_segment_params.squared_distances_to_line(points).max() > self.config.tolerance_sq
 
         eligible = [i for i in range(len(segments)) if needs_split(segments[i])]
         if eligible:
@@ -211,7 +200,7 @@ class FitterToPointsSequence:
         return cloned_before + [segment1, segment2] + cloned_after
 
     def adjust_segmentation(self, segments: list[SequenceSegment], start_segment_index:int) -> float:
-        variance = 0
+        sse_per_segment = 0
         for iterations_count in range(self.config.max_adjust_iterations):
             # The start segment is typically the 1st segment of the pair resulting from the split.
             # Then we do iterations of following (at most MAX_ITERATIONS)
@@ -270,20 +259,25 @@ class FitterToPointsSequence:
                     segments[-1].refit()
                     segments[0].refit()
 
-            variance = sum(s.line_segment_params.loss * s.points_count() for s in segments) / len(self.whole_sequence)
-            if variance < self.config.global_tolerance_sq:
+            # Point-weighted mean of per-segment SSE (loss is a sum of squared
+            # distances): ~ SSE_total / len(segments) for evenly sized segments.
+            # Scales with sampling density: on denser contours the early-stop
+            # and no-improvement gates in _fit fire later, so splitting runs
+            # closer to what the per-point eligibility criterion demands.
+            sse_per_segment = sum(s.line_segment_params.loss * s.points_count() for s in segments) / len(self.whole_sequence)
+            if sse_per_segment < self.config.tolerance_sq:
                 if self.config.verbose:
-                    print(f"at {len(segments)} segments, {iterations_count} iterations variance smaller than global_tolerance. Breaking up")
-                return variance
+                    print(f"at {len(segments)} segments, {iterations_count} iterations sse per segment within tolerance. Breaking up")
+                return sse_per_segment
 
             if changes_count == 0:
                 if self.config.verbose:
                     print(f"at {len(segments)} segments, {iterations_count} iterations were no changes. Breaking up")
-                return variance
+                return sse_per_segment
 
         if self.config.verbose:
             print(f"at {len(segments)} segments, adjust_segmentation reached {self.config.max_adjust_iterations} iterations.")
-        return variance
+        return sse_per_segment
 
 
     ''' :returns index where segment1 should end'''

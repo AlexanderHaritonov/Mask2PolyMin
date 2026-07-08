@@ -94,8 +94,9 @@ if __name__ == "__main__":
     # Per the plan, step 5 (IoU noise-floor measurement) is what calibrates
     # per-algorithm floors. The two algorithms differ qualitatively here:
     #   - RDP picks subset vertices; tight ε drives it toward N-vertex retention.
-    #   - PolyFit2D fits least-squares lines and stops via min_split_improvement,
-    #     so on a noisy circle it converges to a smooth fit, not the input.
+    #   - PolyFit2D fits least-squares lines and stops when splits no longer
+    #     improve the fit by ~tolerance² of SSE per segment, so on a noisy
+    #     circle it converges to a smooth fit, not the input.
     # We print both floors for visual inspection but only assert wrappers work.
     print("\nTight-tolerance behaviour (algorithm-specific floors expected):")
     rdp_tight = rdp_opencv(contour_closed, 0.1)
