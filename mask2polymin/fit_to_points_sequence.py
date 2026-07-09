@@ -105,7 +105,9 @@ class FitterToPointsSequence:
                 continue
             combined = subsequence(self.whole_sequence, a.first_index, b.last_index)
             combined_fit = fit_line_segment(combined)
-            if combined_fit.loss / len(combined) <= self.config.tolerance_sq:
+            both_sides_collinear_on_average = combined_fit.loss / len(combined) <= self.config.tolerance_sq
+            no_point_off = combined_fit.squared_distances_to_line(combined).max() <= self.config.tolerance_sq
+            if both_sides_collinear_on_average and no_point_off:
                 # do the merge
                 merged = SequenceSegment(
                     whole_sequence=self.whole_sequence,
@@ -161,6 +163,9 @@ class FitterToPointsSequence:
             return last_index - first_index + 1
         else:
             return len(self.whole_sequence) - first_index + last_index + 1 # for closed polygon / circular case
+
+    def points_minus_orphans_count(self, segments: list[SequenceSegment]) -> int:
+        return sum(s.points_count() for s in segments)
 
     def split_segment(self, segments: list[SequenceSegment], segment_to_split_index: int) -> list[SequenceSegment]:
         segment = segments[segment_to_split_index]
@@ -264,7 +269,7 @@ class FitterToPointsSequence:
             # Scales with sampling density: on denser contours the early-stop
             # and no-improvement gates in _fit fire later, so splitting runs
             # closer to what the per-point eligibility criterion demands.
-            sse_per_segment = sum(s.line_segment_params.loss * s.points_count() for s in segments) / len(self.whole_sequence)
+            sse_per_segment = sum(s.line_segment_params.loss * s.points_count() for s in segments) / self.points_minus_orphans_count(segments)
             if sse_per_segment < self.config.tolerance_sq:
                 if self.config.verbose:
                     print(f"at {len(segments)} segments, {iterations_count} iterations sse per segment within tolerance. Breaking up")
