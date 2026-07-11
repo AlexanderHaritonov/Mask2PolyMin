@@ -277,6 +277,31 @@ iteration too early.
 4. README: check whether the algorithm description mentions the partition invariant;
    update if so (one paragraph on orphaned junction points).
 
+## Step 7 (future) — Unmasked separation: score against core-half fits
+
+The orphaning rule ("farther than tolerance from *both* lines") is evaluated against
+lines fitted **with the contested point included** — circular. A displaced junction
+point has maximum leverage on its own segment's TLS fit: rotating the line about the
+centroid costs the interior points little and buys the outlier much, so the fit tilts
+until it covers the point (masking). Displaced-corner probe: line dragged ~8.7°, the
+corner ends 0.36 px from its own line vs. 1.06 px from the honest one — never orphaned;
+only corners that happen to belong to *neither* neighbor's fit get orphaned.
+
+Fix: in `best_consecutive_segments_separation`, compute `squared_errors_seg1/2` against
+lines fitted on each segment's **uncontested core half** — `[first_index..left_limit]`
+for seg1, `[right_limit..last_index]` for seg2 — which never contain the contested
+window points. The corner then faces the honest line, gets orphaned, and the refit
+snaps the segment back to true.
+
+Performance: naively this adds two `fit_line_segment` calls per separation call
+(~80–160 per contour) ⇒ measured ≈ 2× total `fit()` time (+47…124%), dominated by
+numpy per-call overhead (`np.cov` + `eigh`). Optimization: points are static, so
+precompute prefix sums of the moments (Σx, Σy, Σx², Σy², Σxy) once in `__init__`;
+the TLS centroid, direction (closed-form 2×2 eigenvector) and loss of any contiguous
+range are then O(1) — scoring needs no start/end extremes. Overhead drops to a few
+percent, and `refit()` / the merge gate can reuse the same machinery for a net speedup.
+Center coordinates by the global centroid at init for numerical stability.
+
 ## Sequencing for review
 
 | Step | Contents | Risk |
@@ -286,6 +311,7 @@ iteration too early.
 | 4 | corner anchor from orphan mean | low |
 | 5 | test updates + new tests | — |
 | 6 | full verification + README | — |
+| 7 | core-half fits in separation + O(1) prefix-moment range fits | separate change |
 
 Steps 1 and 2+3 each leave the suite green on their own. I'd commit each step
 separately so the diff stays reviewable.

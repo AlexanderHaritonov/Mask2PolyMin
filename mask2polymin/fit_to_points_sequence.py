@@ -8,6 +8,9 @@ from mask2polymin.sequence_segment import SequenceSegment, subsequence
 
 PLOT_SEGMENTS = False
 
+# Hard floor for a line fit; orphaning never squeezes a segment below it.
+MIN_SEGMENT_POINTS = 2
+
 @dataclass
 class FitterConfig:
     max_segments_count: int = 30
@@ -21,6 +24,9 @@ class FitterConfig:
     #   - improvement: each split must reduce that SSE by at least one
     #     outlier's worth, else the fitter gives up.
     tolerance: float = 1.0
+    # Max points per junction that may be left orphaned (assigned to no segment);
+    # orphaning is data-driven: a point is orphaned iff farther than tolerance from both adjacent lines.
+    max_orphans_per_junction: int = 2
     verbose: bool = False
 
     def __post_init__(self):
@@ -172,6 +178,12 @@ class FitterToPointsSequence:
     def points_minus_orphans_count(self, segments: list[SequenceSegment]) -> int:
         return sum(s.points_count() for s in segments)
 
+    def index_distance(self, a: int, b: int) -> int:
+        d = abs(a - b)
+        if self.is_closed:
+            return min(d, len(self.whole_sequence) - d)  # wrap-around may be the shorter way
+        return d
+
     def split_segment(self, segments: list[SequenceSegment], segment_to_split_index: int) -> list[SequenceSegment]:
         segment = segments[segment_to_split_index]
         if segment.first_index < segment.last_index:
@@ -220,28 +232,23 @@ class FitterToPointsSequence:
             #   3. re-fit the current segment.
 
             def find_optimal_break_and_adjust(previous_segment, next_segment)->int:
-                optimal_last_index = self.best_consecutive_segments_separation(previous_segment, next_segment)
-                if optimal_last_index > previous_segment.first_index:
-                    count_of_points_changing_segment = abs(optimal_last_index - previous_segment.last_index)
-                else: # this might happen with closed polygons
-                    old_points_count = previous_segment.points_count()
-                    new_points_count = self.points_count(previous_segment.first_index, optimal_last_index)
-                    count_of_points_changing_segment = abs(new_points_count - old_points_count)
+                new_last, new_first = self.best_consecutive_segments_separation(previous_segment, next_segment)
+                boundary_shift = max(self.index_distance(previous_segment.last_index, new_last),
+                                     self.index_distance(next_segment.first_index, new_first))
+                if boundary_shift > 0:
+                    previous_segment.last_index = new_last
+                    next_segment.first_index = new_first
 
-                if count_of_points_changing_segment > 0:
-                    previous_segment.last_index = optimal_last_index
-                    next_segment.first_index = (optimal_last_index + 1) % len(self.whole_sequence)
-
-                return count_of_points_changing_segment
+                return boundary_shift
 
             changes_count = 0
 
             start_segment_dirty = False
             for i in range(start_segment_index, len(segments) - 1):
-                count_of_points_changing_segment = find_optimal_break_and_adjust(segments[i], segments[i+1])
-                if count_of_points_changing_segment > 1:
+                boundary_shift = find_optimal_break_and_adjust(segments[i], segments[i+1])
+                if boundary_shift > 1:
                     changes_count += 1
-                if count_of_points_changing_segment > 0:
+                if boundary_shift > 0:
                     if i == start_segment_index:
                         start_segment_dirty = True
                     segments[i+1].refit()
@@ -251,10 +258,10 @@ class FitterToPointsSequence:
             reverse_run_start = start_segment_index - 1 if start_segment_index > 0 else len(segments) - 2
             segment0_dirty = False
             for i in range(reverse_run_start, -1, -1):
-                count_of_points_changing_segment = find_optimal_break_and_adjust(segments[i], segments[i+1])
-                if count_of_points_changing_segment > 1:
+                boundary_shift = find_optimal_break_and_adjust(segments[i], segments[i+1])
+                if boundary_shift > 1:
                     changes_count += 1
-                if count_of_points_changing_segment > 0:
+                if boundary_shift > 0:
                     if i == 0:
                         segment0_dirty = True
                     segments[i+1].refit()
@@ -262,19 +269,19 @@ class FitterToPointsSequence:
                 segments[0].refit()
 
             if self.is_closed:
-                count_of_points_changing_segment = find_optimal_break_and_adjust(segments[-1], segments[0])
-                if count_of_points_changing_segment > 1:
+                boundary_shift = find_optimal_break_and_adjust(segments[-1], segments[0])
+                if boundary_shift > 1:
                     changes_count += 1
-                if count_of_points_changing_segment > 0:
+                if boundary_shift > 0:
                     segments[-1].refit()
                     segments[0].refit()
 
-            # Point-weighted mean of per-segment SSE (loss is a sum of squared
-            # distances): ~ SSE_total / len(segments) for evenly sized segments.
-            # Scales with sampling density: on denser contours the early-stop
-            # and no-improvement gates in _fit fire later, so splitting runs
-            # closer to what the per-point eligibility criterion demands.
-            sse_per_segment = sum(s.line_segment_params.loss * s.points_count() for s in segments) / self.points_minus_orphans_count(segments)
+            # Point-weighted mean of per-segment SSE for evenly sized segments. Plus penalty"
+            # Each orphan is charged one tolerance-sized outlier, spread over the segments, so orphaning is never free in the stop/improvement gates.
+            assigned_count = self.points_minus_orphans_count(segments)
+            orphans_count = len(self.whole_sequence) - assigned_count
+            orphans_penalty = orphans_count * self.config.tolerance_sq / len(segments)
+            sse_per_segment = sum(s.line_segment_params.loss * s.points_count() for s in segments) / assigned_count + orphans_penalty
             if sse_per_segment < self.config.tolerance_sq:
                 if self.config.verbose:
                     print(f"at {len(segments)} segments, {iterations_count} iterations sse per segment within tolerance. Breaking up")
@@ -290,20 +297,64 @@ class FitterToPointsSequence:
         return sse_per_segment
 
 
-    ''' :returns index where segment1 should end'''
-    def best_consecutive_segments_separation(self, segment1: SequenceSegment, segment2: SequenceSegment) -> int:
-        assert (segment1.last_index == segment2.first_index - 1) or (segment2.first_index==0 and segment1.last_index == len(self.whole_sequence) - 1)
+    def best_consecutive_segments_separation(self, segment1: SequenceSegment, segment2: SequenceSegment) -> tuple[int, int]:
+        """:returns (last index of segment1, first index of segment2),
+        between them 0..config.max_orphans_per_junction points may be left orphaned.
+        Orphaning a point costs tolerance_sq, so a point is orphaned iff it lies farther than tolerance from both lines."""
+        n = len(self.whole_sequence)
+        assert (segment2.first_index - segment1.last_index - 1) % n <= self.config.max_orphans_per_junction
         left_limit = self.lower_mid_index(segment1.first_index, segment1.last_index)
         right_limit = self.lower_mid_index(segment2.first_index, segment2.last_index)
         relevant_points = self.subsequence(left_limit, right_limit)
         assert relevant_points is not None and relevant_points.shape[0] >= 2
         squared_errors_seg1 = segment1.line_segment_params.squared_distances_to_line(relevant_points)
         squared_errors_seg2 = segment2.line_segment_params.squared_distances_to_line(relevant_points)
-        errors_cumsum1 = squared_errors_seg1.cumsum()
-        errors_cumsum2 = squared_errors_seg2[::-1].cumsum()
-        compound_error_sums = errors_cumsum1[:-1] + errors_cumsum2[-2::-1]
-        optimal_last_index = np.argmin(compound_error_sums) # counting from left_limit as 0
-        return (int(optimal_last_index) + left_limit) % len(self.whole_sequence)
+        w = relevant_points.shape[0]
+        head_cum = squared_errors_seg1.cumsum()              # head_cum[i] = seg1 cost of window points [0..i]
+        tail_cum = squared_errors_seg2[::-1].cumsum()[::-1]  # tail_cum[j] = seg2 cost of window points [j..w-1]
+
+        # gap == 0: the plain gapless cut; always a valid candidate
+        costs = head_cum[:-1] + tail_cum[1:]
+        best_i = int(np.argmin(costs))
+        best_cost = costs[best_i]
+
+        # Orphaning decisions are only sound when both lines already fit their points well.
+        # Against coarse intermediate fits stay gapless (orphaning would hide exactly the high-error points that must drive further splits).
+        both_fits_within_tolerance = (
+            segment1.line_segment_params.loss / segment1.points_count() <= self.config.tolerance_sq
+            and segment2.line_segment_params.loss / segment2.points_count() <= self.config.tolerance_sq)
+        if not both_fits_within_tolerance:
+            return (left_limit + best_i) % n, (left_limit + best_i + 1) % n
+
+        # points outside the contested window always stay with their segment
+        retained1_outside = 0 if left_limit == segment1.first_index else self.points_count(segment1.first_index, left_limit) - 1
+        retained2_outside = 0 if right_limit == segment2.last_index else self.points_count(right_limit, segment2.last_index) - 1
+
+        best_i, best_gap = self._best_cut_with_orphans(head_cum, tail_cum, retained1_outside, retained2_outside,
+                                                       gapless_cost=best_cost, gapless_i=best_i)
+        new_last1 = (left_limit + best_i) % n
+        new_first2 = (left_limit + best_i + best_gap + 1) % n
+        return new_last1, new_first2
+
+    def _best_cut_with_orphans(self, head_cum, tail_cum, retained1_outside, retained2_outside,
+                               gapless_cost, gapless_i) -> tuple[int, int]:
+        """Search cuts leaving 1..max_orphans_per_junction window points orphaned;
+        :returns (cut index i, gap) in window coordinates. Fewer orphans win ties."""
+        w = len(head_cum)
+        best_cost, best_i, best_gap = gapless_cost, gapless_i, 0
+        max_gap = min(self.config.max_orphans_per_junction, w - 2)  # each segment keeps >= 1 window point
+        for gap in range(1, max_gap + 1):
+            # cut i: seg1 gets window points [0..i], orphans [i+1..i+gap], seg2 the rest
+            candidates_count = w - 1 - gap
+            costs = head_cum[:candidates_count] + tail_cum[gap + 1:] + gap * self.config.tolerance_sq
+            i_range = np.arange(candidates_count)
+            remaining1 = retained1_outside + i_range + 1
+            remaining2 = retained2_outside + (candidates_count - i_range)
+            costs = np.where((remaining1 < MIN_SEGMENT_POINTS) | (remaining2 < MIN_SEGMENT_POINTS), np.inf, costs)
+            i = int(np.argmin(costs))
+            if costs[i] < best_cost:  # strictly better only: fewer orphans win ties
+                best_cost, best_i, best_gap = costs[i], i, gap
+        return best_i, best_gap
 
 
 
