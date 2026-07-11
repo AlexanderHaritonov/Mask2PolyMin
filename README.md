@@ -1,18 +1,14 @@
 # Mask2PolyMin
-Geometry processing package to turn noisy raster segmentation masks into clean, optimized, closed polygons.
-
-Given a dense polygon, fit a polyline with a minimal number of segments.
+Package to turn noisy raster segmentation masks into clean polygons with a minimal number of segments.
 
 Useful for post‑processing bitmask segmentation outputs from models such as MaskRCNN or YOLO‑Seg, especially when regular or low‑complexity shapes are required:
-- constructing larger structures by matching edges
 - obtaining simple geometric representations
+- to reconstruct artificial objects that consist of straight edges, sharp corners, and regular geometric properties.
 
 Unlike common point‑thinning algorithms (Ramer–Douglas–Peucker, Visvalingam–Whyatt, Zhang–Suen), this method:
 - minimizes segment count while preserving the raw shape
 - does not shrink the area or remove corners
 - reconstructs corners with sub-pixel accuracy: vertices are intersections of least-squares fitted lines.
-
-Built for man-made or artificial objects that consist of straight edges, sharp corners, and regular geometric properties.
 
 ## Example
 
