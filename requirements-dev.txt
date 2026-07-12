@@ -1,3 +1,4 @@
 -r requirements.txt
 pytest
 matplotlib
+opencv-python-headless  # performance_test: RDP baseline + IoU rasterization
