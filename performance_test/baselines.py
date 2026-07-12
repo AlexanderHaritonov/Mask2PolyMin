@@ -36,7 +36,7 @@ def mask2polymin(contour: np.ndarray, tolerance: float) -> np.ndarray:
     """
     config = FitterConfig(tolerance=float(tolerance), max_segments_count=len(contour))
     segments = FitterToPointsSequence(contour, is_closed=True, config=config).fit()
-    return segments_to_polyline(segments, is_closed=True)
+    return segments_to_polyline(segments, is_closed=True, tolerance=config.tolerance)
 
 
 # ---------------------------------------------------------------------------

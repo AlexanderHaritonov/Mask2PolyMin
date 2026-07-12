@@ -276,7 +276,8 @@ class FitterToPointsSequence:
             assigned_count = self.points_minus_orphans_count(segments)
             orphans_count = len(self.whole_sequence) - assigned_count
             orphans_penalty = orphans_count * self.config.tolerance_sq / len(segments)
-            sse_per_segment = sum(s.line_segment_params.loss * s.points_count() for s in segments) / assigned_count + orphans_penalty
+            sse_per_segment = (sum(s.line_segment_params.loss * s.points_count() for s in segments) / assigned_count
+                               + orphans_penalty)
             if sse_per_segment < self.config.tolerance_sq:
                 if self.config.verbose:
                     print(f"at {len(segments)} segments, {iterations_count} iterations sse per segment within tolerance. Breaking up")
