@@ -30,8 +30,11 @@ python -m venv .venv && source .venv/bin/activate && pip install -r requirements
 ## Performance
 The implementation is optimized, uses NumPy broadcasting.
 
-## future work
+## future work and ideas
+- optimize orphaning
 - performance tests and comparison
+- Generalize orphaning to segment interiors ?
+- explore line fitting with Theil–Sen and respectively the Median or Mean Absolute Error as stop criterion ?
 
 ## Running Tests
 
