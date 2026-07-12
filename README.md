@@ -10,6 +10,15 @@ Unlike common point‑thinning algorithms (Ramer–Douglas–Peucker, Visvalinga
 - does not shrink the area or remove corners
 - reconstructs corners with sub-pixel accuracy: vertices are intersections of least-squares fitted lines.
 
+### Orphaned junction points
+A junction point — where one fitted segment ends and the next begins — is often an outlier
+to one or both segments, and in a least-squares fit an outlier at the segment's end has
+disproportionately large influence: a single misplaced pixel can rotate the fitted line and
+drag the reconstructed vertex. Mask2PolyMin therefore may leave up to
+`max_orphans_per_junction` points at each junction *orphaned* — assigned to no segment:
+a point is orphaned iff it lies farther than `tolerance` from both adjacent lines, and the
+orphans' mean then anchors the corner reconstruction.
+
 ## Example
 
 python -m venv .venv && source .venv/bin/activate && pip install -r requirements-examples.txt && python example_usage.py
