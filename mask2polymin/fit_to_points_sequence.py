@@ -1,7 +1,7 @@
 import numpy as np
 from dataclasses import dataclass
 
-from mask2polymin.fit_line_segment import fit_line_segment
+from mask2polymin.fit_line_segment import principal_axis
 from mask2polymin.line_segment_params import LineSegmentParams
 from mask2polymin.sequence_segment import SequenceSegment, subsequence
 
@@ -60,7 +60,7 @@ class FitterToPointsSequence:
         return self._merge_collinear_segments(segments_sequence)
 
     def _fit(self) -> list[SequenceSegment]:
-        segment_params: LineSegmentParams = fit_line_segment(self.whole_sequence)
+        segment_params: LineSegmentParams = self.fit_range(0, len(self.whole_sequence) - 1)
         initial_segment = SequenceSegment(
             whole_sequence=self.whole_sequence,
             first_index=0,
@@ -119,7 +119,7 @@ class FitterToPointsSequence:
                 i += 1
                 continue
             combined = subsequence(self.whole_sequence, a.first_index, b.last_index)
-            combined_fit = fit_line_segment(combined)
+            combined_fit = self.fit_range(a.first_index, b.last_index)
             both_sides_collinear_on_average = combined_fit.loss / len(combined) <= self.config.tolerance_sq
             no_point_off = combined_fit.squared_distances_to_line(combined).max() <= self.config.tolerance_sq
             if both_sides_collinear_on_average and no_point_off:
@@ -189,32 +189,52 @@ class FitterToPointsSequence:
         else:  # circular wrap
             return M[-1] - M[first_index] + M[last_index + 1], len(self.whole_sequence) - first_index + last_index + 1
 
-    def _range_line_fit(self, first_index, last_index) -> tuple[np.ndarray, np.ndarray] | None:
-        """TLS line fit through the points of a contiguous (possibly wrapping) index range, from the prefix moments.
-        :returns (centroid, unit direction) in centered coordinates; None if degenerate."""
+
+    def fit_range(self, first_index, last_index) -> LineSegmentParams:
+        # TLS line fit through the points of a contiguous (possibly wrapping) index range, from the prefix moments.
         (sx, sy, sxx, syy, sxy), count = self._range_moments(first_index, last_index)
         if count < 2:
-            return None
+            raise ValueError("Need at least 2 points to fit a line.")
         mean_x, mean_y = sx / count, sy / count
         cov_xx = sxx / count - mean_x * mean_x
         cov_yy = syy / count - mean_y * mean_y
         cov_xy = sxy / count - mean_x * mean_y
-        if cov_xx == 0 and cov_yy == 0 and cov_xy == 0:
-            return None  # all points identical
-        angle = 0.5 * np.arctan2(2 * cov_xy, cov_xx - cov_yy)  # principal axis of the 2x2 covariance
-        return np.array([mean_x, mean_y]), np.array([np.cos(angle), np.sin(angle)])
+        direction, eig_max, eig_min = principal_axis(cov_xx, cov_yy, cov_xy)
+        centroid = np.array([mean_x, mean_y]) + self._sequence_center
+
+        if eig_max <= 1e-8:  # degenerate: all points identical (same threshold scale as fit_line_segment's allclose)
+            return LineSegmentParams(
+                start_point=centroid,
+                end_point=centroid,
+                direction=np.array([1.0, 0.0], dtype=np.float64),
+                loss=0.0)
+
+        projections = (self.subsequence(first_index, last_index) - centroid) @ direction
+        # principal_axis eigenvalues come from the population covariance (divide by count);
+        # fit_line_segment's come from np.cov's sample covariance (ddof=1, divide by count-1).
+        # Scale to keep loss/straightness conventions identical.
+        loss = count * max(eig_min, 0.0) * count / (count - 1)
+        straightness = float(eig_min / eig_max) if eig_max > 0 else 0.0
+        return LineSegmentParams(
+            start_point=centroid + projections.min() * direction,
+            end_point=centroid + projections.max() * direction,
+            direction=direction,
+            loss=loss,
+            straightness=straightness)
+
+    def refit_segment(self, segment: SequenceSegment) -> None:
+        segment.line_segment_params = self.fit_range(segment.first_index, segment.last_index)
 
     def _squared_errors_to_core_line(self, core_first, core_last, fallback: LineSegmentParams, points) -> np.ndarray:
         """Squared distances of `points` to the TLS line of a segment's uncontested core [core_first..core_last].
           Scoring against the core — never against a line fitted with the contested points themselves — prevents a junction outlier from masking itself by dragging its own segment's fit.
           Falls back to the segment's current line when the core is too small to define one."""
-        fit = self._range_line_fit(core_first, core_last)
-        if fit is None:
+        if core_first == core_last:  # a single point cannot define a line
             return fallback.squared_distances_to_line(points)
-        centroid, direction = fit
-        rel = points - self._sequence_center - centroid
-        cross = rel[:, 0] * direction[1] - rel[:, 1] * direction[0]
-        return cross * cross
+        core_line = self.fit_range(core_first, core_last)
+        if np.array_equal(core_line.start_point, core_line.end_point):  # degenerate: identical points
+            return fallback.squared_distances_to_line(points)
+        return core_line.squared_distances_to_line(points)
 
     def index_distance(self, a: int, b: int) -> int:
         d = abs(a - b)
@@ -224,35 +244,18 @@ class FitterToPointsSequence:
 
     def split_segment(self, segments: list[SequenceSegment], segment_to_split_index: int) -> list[SequenceSegment]:
         segment = segments[segment_to_split_index]
-        if segment.first_index < segment.last_index:
-            pivot_point_index = (segment.first_index + segment.last_index) // 2
-            part1 = self.whole_sequence[segment.first_index : pivot_point_index + 1]
-            part2 = self.whole_sequence[pivot_point_index + 1 : segment.last_index + 1]
-        else: # can happen if is_closed
-            pivot_point_index = (segment.first_index + segment.last_index + len(self.whole_sequence)) // 2
-            if pivot_point_index < len(self.whole_sequence):
-                part1 = self.whole_sequence[segment.first_index : pivot_point_index + 1]
-                part2 = np.vstack([self.whole_sequence[pivot_point_index + 1 :], self.whole_sequence[: segment.last_index + 1]])
-            else:
-                pivot_point_index -= len(self.whole_sequence)
-                part1 = np.vstack([self.whole_sequence[segment.first_index:], self.whole_sequence[:pivot_point_index + 1]])
-                part2 = self.whole_sequence[pivot_point_index + 1 : segment.last_index + 1]
-
-        part1_fit: LineSegmentParams = fit_line_segment(part1)
+        pivot_point_index = self.lower_mid_index(segment.first_index, segment.last_index)
+        seg2_first_index = (pivot_point_index + 1) % len(self.whole_sequence)
         segment1 = SequenceSegment(
-            whole_sequence= self.whole_sequence,
-            first_index= segment.first_index,
-            last_index= pivot_point_index,
-            line_segment_params=part1_fit)
-        part2_fit: LineSegmentParams = fit_line_segment(part2)
-        seg2_first_index = pivot_point_index + 1
-        if seg2_first_index >= len(self.whole_sequence):
-            seg2_first_index -= len(self.whole_sequence)
+            whole_sequence=self.whole_sequence,
+            first_index=segment.first_index,
+            last_index=pivot_point_index,
+            line_segment_params=self.fit_range(segment.first_index, pivot_point_index))
         segment2 = SequenceSegment(
-            whole_sequence= self.whole_sequence,
-            first_index= seg2_first_index,
-            last_index= segment.last_index,
-            line_segment_params=part2_fit)
+            whole_sequence=self.whole_sequence,
+            first_index=seg2_first_index,
+            last_index=segment.last_index,
+            line_segment_params=self.fit_range(seg2_first_index, segment.last_index))
 
         # Clone segments before and after the split point
         cloned_before = [seg.clone() for seg in segments[:segment_to_split_index]]
@@ -289,9 +292,9 @@ class FitterToPointsSequence:
                 if boundary_shift > 0:
                     if i == start_segment_index:
                         start_segment_dirty = True
-                    segments[i+1].refit()
+                    self.refit_segment(segments[i+1])
             if start_segment_dirty:
-                segments[start_segment_index].refit()
+                self.refit_segment(segments[start_segment_index])
 
             reverse_run_start = start_segment_index - 1 if start_segment_index > 0 else len(segments) - 2
             segment0_dirty = False
@@ -302,17 +305,17 @@ class FitterToPointsSequence:
                 if boundary_shift > 0:
                     if i == 0:
                         segment0_dirty = True
-                    segments[i+1].refit()
+                    self.refit_segment(segments[i+1])
             if segment0_dirty:
-                segments[0].refit()
+                self.refit_segment(segments[0])
 
             if self.is_closed:
                 boundary_shift = find_optimal_break_and_adjust(segments[-1], segments[0])
                 if boundary_shift > 1:
                     changes_count += 1
                 if boundary_shift > 0:
-                    segments[-1].refit()
-                    segments[0].refit()
+                    self.refit_segment(segments[-1])
+                    self.refit_segment(segments[0])
 
             # Point-weighted mean of per-segment SSE for evenly sized segments. Plus "penalty":
             # Each orphan is charged one tolerance-sized outlier, spread over the segments, so orphaning is never free in the stop/improvement gates.
@@ -371,21 +374,31 @@ class FitterToPointsSequence:
         else:
             squared_errors_seg1 = segment1.line_segment_params.squared_distances_to_line(relevant_points)
             squared_errors_seg2 = segment2.line_segment_params.squared_distances_to_line(relevant_points)
-        w = relevant_points.shape[0]
         head_cum = squared_errors_seg1.cumsum()              # head_cum[i] = seg1 cost of window points [0..i]
         tail_cum = squared_errors_seg2[::-1].cumsum()[::-1]  # tail_cum[j] = seg2 cost of window points [j..w-1]
 
-        # gap == 0: the plain gapless cut; always a valid candidate
-        costs = head_cum[:-1] + tail_cum[1:]
+        # points outside the contested window always stay with their segment
+        retained1_outside = (0 if left_limit == segment1.first_index
+                             else self.points_count(segment1.first_index, left_limit) - 1)
+        retained2_outside = (0 if right_limit == segment2.last_index
+                             else self.points_count(right_limit, segment2.last_index) - 1)
+
+        # refuse to starve either segment below two points, the minimum needed to fit a line
+        w = relevant_points.shape[0]
+        i_range = np.arange(w - 1)
+        remaining1 = retained1_outside + i_range + 1
+        remaining2 = retained2_outside + (w - 1 - i_range)
+        
+        # masking: infinite cost for cuts that squeeze a segment below the fit minimum
+        costs = np.where((remaining1 < MIN_SEGMENT_POINTS) | (remaining2 < MIN_SEGMENT_POINTS),
+                         np.inf, head_cum[:-1] + tail_cum[1:])
         best_i = int(np.argmin(costs))
         best_cost = costs[best_i]
+        if not np.isfinite(best_cost):  # no valid cut: keep the current boundary
+            return segment1.last_index, segment2.first_index
 
         if not both_fits_within_tolerance:
             return (left_limit + best_i) % n, (left_limit + best_i + 1) % n
-
-        # points outside the contested window always stay with their segment
-        retained1_outside = 0 if left_limit == segment1.first_index else self.points_count(segment1.first_index, left_limit) - 1
-        retained2_outside = 0 if right_limit == segment2.last_index else self.points_count(right_limit, segment2.last_index) - 1
 
         best_i, best_gap = self._best_cut_with_orphans(head_cum, tail_cum, retained1_outside, retained2_outside,
                                                        gapless_cost=best_cost, gapless_i=best_i)
@@ -407,6 +420,8 @@ class FitterToPointsSequence:
             i_range = np.arange(candidates_count)
             remaining1 = retained1_outside + i_range + 1
             remaining2 = retained2_outside + (candidates_count - i_range)
+
+            # masking: infinite cost for cuts that squeeze a segment below the fit minimum
             costs = np.where((remaining1 < MIN_SEGMENT_POINTS) | (remaining2 < MIN_SEGMENT_POINTS), np.inf, costs)
             i = int(np.argmin(costs))
             if costs[i] < best_cost:  # strictly better only: fewer orphans win ties
