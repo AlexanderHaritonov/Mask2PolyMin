@@ -76,6 +76,23 @@ def test_identical_points_degenerate():
     assert actual.loss == 0.0
 
 
+def test_without_endpoints_same_line_cheaper_params():
+    rng = np.random.default_rng(5)
+    points = np.cumsum(rng.normal(0.5, 0.4, size=(40, 2)), axis=0)
+    fitter = FitterToPointsSequence(points)
+    full = fit_range(fitter._moments, 4, 30)
+    slim = fit_range(fitter._moments, 4, 30, with_endpoints=False)
+
+    np.testing.assert_allclose(slim.direction, full.direction)
+    assert slim.loss == full.loss
+    assert slim.straightness == full.straightness
+    # endpoints collapse to the centroid — still a point on the fitted line
+    np.testing.assert_array_equal(slim.start_point, slim.end_point)
+    np.testing.assert_allclose(
+        full.squared_distances_to_line(points[4:31]),
+        slim.squared_distances_to_line(points[4:31]), atol=1e-12)
+
+
 def test_principal_axis_matches_eigh():
     rng = np.random.default_rng(3)
     for _ in range(50):

@@ -1,7 +1,7 @@
 import numpy as np
 from dataclasses import dataclass
 
-from mask2polymin.sequence_moments import subsequence, fit_range, refit_segment, SequenceMoments
+from mask2polymin.sequence_moments import subsequence, fit_range, refit_segment, SequenceMoments, DEGENERATE_STRAIGHTNESS
 from mask2polymin.line_segment_params import LineSegmentParams
 from mask2polymin.sequence_segment import SequenceSegment
 
@@ -175,8 +175,8 @@ class FitterToPointsSequence:
           Falls back to the segment's current line when the core is too small to define one."""
         if core_first == core_last:  # a single point cannot define a line
             return fallback.squared_distances_to_line(points)
-        core_line = fit_range(self._moments, core_first, core_last)
-        if np.array_equal(core_line.start_point, core_line.end_point):  # degenerate: identical points
+        core_line = fit_range(self._moments, core_first, core_last, with_endpoints=False)
+        if core_line.straightness == DEGENERATE_STRAIGHTNESS:
             return fallback.squared_distances_to_line(points)
         return core_line.squared_distances_to_line(points)
 

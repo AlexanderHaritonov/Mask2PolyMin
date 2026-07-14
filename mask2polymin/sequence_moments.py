@@ -5,6 +5,9 @@ import numpy as np
 from mask2polymin.line_segment_params import LineSegmentParams
 from mask2polymin.sequence_segment import SequenceSegment
 
+# Sentinel straightness of a degenerate fit (identical points): the direction is meaningless.
+DEGENERATE_STRAIGHTNESS = 1.0
+
 
 def principal_axis(cov_xx: float, cov_yy: float, cov_xy: float) -> tuple[np.ndarray, float, float]:
     """Closed-form eigendecomposition of the symmetric 2x2 covariance matrix [[cov_xx, cov_xy], [cov_xy, cov_yy]].
@@ -44,8 +47,12 @@ def range_moments(moments: SequenceMoments, first_index: int, last_index: int) -
         return M[-1] - M[first_index] + M[last_index + 1], len(moments.whole_sequence) - first_index + last_index + 1
 
 
-def fit_range(moments: SequenceMoments, first_index: int, last_index: int) -> LineSegmentParams:
-    # TLS line fit through the points of a contiguous (possibly wrapping) index range, from the prefix moments.
+def fit_range(moments: SequenceMoments, first_index: int, last_index: int,
+              with_endpoints: bool = True) -> LineSegmentParams:
+    """TLS line fit through the points of a contiguous (possibly wrapping) index range, from the prefix moments.
+    with_endpoints=False skips the extreme-projections pass — the only O(n) part — and sets
+    start_point == end_point == centroid: still a valid point on the line for distance computations, but not the segment's extent.
+    Use it where only line geometry and loss matter."""
     (sx, sy, sxx, syy, sxy), count = range_moments(moments, first_index, last_index)
     if count < 2:
         raise ValueError("Need at least 2 points to fit a line.")
@@ -60,15 +67,25 @@ def fit_range(moments: SequenceMoments, first_index: int, last_index: int) -> Li
         return LineSegmentParams(
             start_point=centroid,
             end_point=centroid,
-            direction=np.array([1.0, 0.0], dtype=np.float64),
-            loss=0.0)
+            direction=np.array([1.0, 0.0], dtype=np.float64),  # arbitrary
+            loss=0.0,
+            straightness=DEGENERATE_STRAIGHTNESS)
 
-    projections = (subsequence(moments.whole_sequence, first_index, last_index) - centroid) @ direction
     # principal_axis eigenvalues come from the population covariance (divide by count);
     # fit_line_segment's come from np.cov's sample covariance (ddof=1, divide by count-1).
     # Scale to keep loss/straightness conventions identical.
     loss = count * max(eig_min, 0.0) * count / (count - 1)
-    straightness = float(eig_min / eig_max) if eig_max > 0 else 0.0
+    straightness = float(eig_min / eig_max)
+
+    if not with_endpoints:
+        return LineSegmentParams(
+            start_point=centroid,
+            end_point=centroid,
+            direction=direction,
+            loss=loss,
+            straightness=straightness)
+
+    projections = (subsequence(moments.whole_sequence, first_index, last_index) - centroid) @ direction
     return LineSegmentParams(
         start_point=centroid + projections.min() * direction,
         end_point=centroid + projections.max() * direction,

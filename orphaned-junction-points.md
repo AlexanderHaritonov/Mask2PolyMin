@@ -321,7 +321,7 @@ Center coordinates by the global centroid at init for numerical stability.
   (~2× refits — fine mode keeps finding real improvements) ⇒ 41→128 ms; straight-edge
   contours +2…40%. Follow-up: step 8.
 
-## Step 8 (future) — O(1) moment-based refit
+## Step 8 — O(1) moment-based refit
 
 Motivation: `refit()` → `fit_line_segment()` is O(n) per call (slice, mean, `np.cov`,
 `eigh`, min/max projections) and dominates runtime — ~850 calls ≈ 50% of `fit()` time
