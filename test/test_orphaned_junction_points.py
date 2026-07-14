@@ -113,8 +113,6 @@ def test_displaced_corners_end_to_end():
     assert all(err <= 1.5 for err in vertex_errors(segments))
 
 
-@pytest.mark.xfail(reason="masking: a displaced corner point drags its own segment's TLS fit "
-                          "and stays covered by it; needs core-half fits (plan step 7)")
 def test_displaced_corners_all_orphaned_strict():
     pts = square_contour(corner_displacement=1.5)
     fitter = FitterToPointsSequence(pts, is_closed=True, config=FitterConfig(tolerance=1.0))

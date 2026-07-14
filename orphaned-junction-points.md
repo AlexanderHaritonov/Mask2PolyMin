@@ -277,7 +277,7 @@ iteration too early.
 4. README: check whether the algorithm description mentions the partition invariant;
    update if so (one paragraph on orphaned junction points).
 
-## Step 7 (future) — Unmasked separation: score against core-half fits
+## Step 7 — Unmasked separation: score against core-half fits
 
 The orphaning rule ("farther than tolerance from *both* lines") is evaluated against
 lines fitted **with the contested point included** — circular. A displaced junction
@@ -302,6 +302,72 @@ range are then O(1) — scoring needs no start/end extremes. Overhead drops to a
 percent, and `refit()` / the merge gate can reuse the same machinery for a net speedup.
 Center coordinates by the global centroid at init for numerical stability.
 
+### As built
+
+- Core scoring is active only in fine-tuning mode (the trust gate: both segments'
+  mean loss within tolerance). Against coarse intermediate fits — segments still
+  spanning corners — half-cores misrepresent the segment and derail the split
+  trajectory (octagon test), so coarse mode keeps whole-fit gapless scoring.
+- The core's **outer** end may hold the neighboring junction's undetected outlier
+  (which poisons a small core worse than a whole fit), so up to
+  `max_orphans_per_junction` points are trimmed there while the core keeps
+  ≥ MIN_SEGMENT_POINTS; too-small cores fall back to the whole-segment fit.
+- `adjust_segmentation` grants one extra pass after the sse gate is satisfied:
+  fine-tuning moves only become visible against lines refitted during the pass
+  in which the gate first fires.
+- Measured: displaced-corner square — all 4 corners orphaned, axis-aligned sides,
+  exact vertices (strict test promoted from xfail). Noisy circle tol 0.71:
+  IoU 0.9828→0.9875, Hausdorff 1.04→1.09, 19→18 segments; cost ≈ 2× adjust work
+  (~2× refits — fine mode keeps finding real improvements) ⇒ 41→128 ms; straight-edge
+  contours +2…40%. Follow-up: step 8.
+
+## Step 8 (future) — O(1) moment-based refit
+
+Motivation: `refit()` → `fit_line_segment()` is O(n) per call (slice, mean, `np.cov`,
+`eigh`, min/max projections) and dominates runtime — ~850 calls ≈ 50% of `fit()` time
+on the noisy-circle benchmark, doubled by step 7's extra fine-tuning passes.
+
+Everything the adjust loop needs about a segment is O(1) from the step-7 prefix
+moments: count and range sums (two prefix-row subtractions), centroid, the 2×2
+covariance from second moments, direction via the closed-form principal axis
+θ = ½·atan2(2·cov_xy, cov_xx − cov_yy), and loss from
+λ_min = (cov_xx+cov_yy)/2 − √(((cov_xx−cov_yy)/2)² + cov_xy²).
+The only O(n) part of `fit_line_segment` — the extreme projections that become
+`start_point`/`end_point` — is needed nowhere in the adjust loop, only at the end
+(polyline corners, `_length`). So: refits during adjustment become O(1) moment
+lookups; one final exact fit per segment fills in the endpoints.
+
+⚠ Loss convention: `fit_line_segment` computes `loss = N·λ_min` from `np.cov`, whose
+default is **ddof=1** (sample covariance, divide by N−1) — so its "loss" is actually
+SSE·N/(N−1), not the true sum of squared distances (1.5× for a 3-point segment).
+All tolerance gates are calibrated against that convention, so the moment-based loss
+must reproduce it — `loss = m²/(m−1)·λ_min_population` — to keep gate decisions
+bit-compatible. (Fixing the convention to honest SSE everywhere is a separate,
+deliberate change.)
+
+Expected gain: reclaims most of step 7's 2× on noisy inputs and likely beats the
+pre-orphan baseline outright; the merge gate's `fit_line_segment(combined)` can
+reuse the same machinery.
+
+### Unifying the two fitting paths
+
+Since step 7 there are two TLS implementations: `fit_line_segment(points)`
+(O(n): `np.cov` + `eigh`, loss, start/end extremes) and the moment-based
+`_range_line_fit` (O(1): centroid + direction only, used for core-line scoring).
+They agree on the direction by construction (the eigenvector is invariant to the
+N vs N−1 covariance scaling), but the duplicated math can drift. Step 8 ends with
+one authoritative path:
+
+- `fit_range(first, last) -> LineSegmentParams` on the fitter — moment-backed,
+  ddof-compatible loss, endpoints computed on demand — used by everything that
+  works on index ranges (refit, core lines, merge's combined fit);
+  `_range_line_fit` folds into it.
+- `fit_line_segment(points)` stays as the utility for raw point arrays
+  (initial whole-contour fit, external callers, tests).
+- both share one closed-form `principal_axis(cov_xx, cov_yy, cov_xy)` helper in
+  `fit_line_segment.py`, so the eigen-math exists exactly once.
+- cross-check test: random ranges, assert both paths agree on direction and loss.
+
 ## Sequencing for review
 
 | Step | Contents | Risk |
@@ -312,6 +378,5 @@ Center coordinates by the global centroid at init for numerical stability.
 | 5 | test updates + new tests | — |
 | 6 | full verification + README | — |
 | 7 | core-half fits in separation + O(1) prefix-moment range fits | separate change |
+| 8 | O(1) moment-based refit; endpoints via one final exact fit | perf only, gates must stay bit-compatible |
 
-Steps 1 and 2+3 each leave the suite green on their own. I'd commit each step
-separately so the diff stays reviewable.
