@@ -50,6 +50,15 @@ class FitterToPointsSequence:
     def fit(self) -> tuple[np.ndarray, list[SequenceSegment]]:
         """Fit and return (polygon, segments): the polyline of fitted-line intersections,
            (M, 2) float vertices (first equals last when closed) and the underlying fitted segments."""
+        self._sequence_center = self.whole_sequence.mean(axis=0).astype(np.float64)
+
+        # Cumulative sums of statistical moments [Σx, Σy, Σx², Σy², Σxy] for sequence prefixes over globally centered coordinates.
+        # This precomputation enables O(1) TLS line fit of any contiguous index range.
+        # Centering keeps the moment differences numerically stable.
+        x, y = (self.whole_sequence - self._sequence_center).astype(np.float64).T
+        self._stat_moments = np.zeros((len(x) + 1, 5))
+        np.cumsum(np.stack([x, y, x * x, y * y, x * y], axis=1), axis=0, out=self._stat_moments[1:])
+
         segments_sequence = self._fit()
         segments = self._merge_collinear_segments(segments_sequence)
         polygon = segments_to_polyline(segments, is_closed=self.is_closed)
@@ -178,6 +187,40 @@ class FitterToPointsSequence:
     def points_minus_orphans_count(self, segments: list[SequenceSegment]) -> int:
         return sum(s.points_count() for s in segments)
 
+    def _range_moments(self, first_index, last_index) -> tuple[np.ndarray, int]:
+        M = self._stat_moments
+        if first_index <= last_index:
+            return M[last_index + 1] - M[first_index], last_index - first_index + 1
+        else:  # circular wrap
+            return M[-1] - M[first_index] + M[last_index + 1], len(self.whole_sequence) - first_index + last_index + 1
+
+    def _range_line_fit(self, first_index, last_index) -> tuple[np.ndarray, np.ndarray] | None:
+        """TLS line fit through the points of a contiguous (possibly wrapping) index range, from the prefix moments.
+        :returns (centroid, unit direction) in centered coordinates; None if degenerate."""
+        (sx, sy, sxx, syy, sxy), count = self._range_moments(first_index, last_index)
+        if count < 2:
+            return None
+        mean_x, mean_y = sx / count, sy / count
+        cov_xx = sxx / count - mean_x * mean_x
+        cov_yy = syy / count - mean_y * mean_y
+        cov_xy = sxy / count - mean_x * mean_y
+        if cov_xx == 0 and cov_yy == 0 and cov_xy == 0:
+            return None  # all points identical
+        angle = 0.5 * np.arctan2(2 * cov_xy, cov_xx - cov_yy)  # principal axis of the 2x2 covariance
+        return np.array([mean_x, mean_y]), np.array([np.cos(angle), np.sin(angle)])
+
+    def _squared_errors_to_core_line(self, core_first, core_last, fallback: LineSegmentParams, points) -> np.ndarray:
+        """Squared distances of `points` to the TLS line of a segment's uncontested core [core_first..core_last].
+          Scoring against the core — never against a line fitted with the contested points themselves — prevents a junction outlier from masking itself by dragging its own segment's fit.
+          Falls back to the segment's current line when the core is too small to define one."""
+        fit = self._range_line_fit(core_first, core_last)
+        if fit is None:
+            return fallback.squared_distances_to_line(points)
+        centroid, direction = fit
+        rel = points - self._sequence_center - centroid
+        cross = rel[:, 0] * direction[1] - rel[:, 1] * direction[0]
+        return cross * cross
+
     def index_distance(self, a: int, b: int) -> int:
         d = abs(a - b)
         if self.is_closed:
@@ -276,14 +319,17 @@ class FitterToPointsSequence:
                     segments[-1].refit()
                     segments[0].refit()
 
-            # Point-weighted mean of per-segment SSE for evenly sized segments. Plus penalty"
+            # Point-weighted mean of per-segment SSE for evenly sized segments. Plus "penalty":
             # Each orphan is charged one tolerance-sized outlier, spread over the segments, so orphaning is never free in the stop/improvement gates.
             assigned_count = self.points_minus_orphans_count(segments)
             orphans_count = len(self.whole_sequence) - assigned_count
             orphans_penalty = orphans_count * self.config.tolerance_sq / len(segments)
             sse_per_segment = (sum(s.line_segment_params.loss * s.points_count() for s in segments) / assigned_count
                                + orphans_penalty)
-            if sse_per_segment < self.config.tolerance_sq:
+            # In a "good enough" state improving moves may still be pending: they only
+            # become visible against the lines refitted during this pass. Grant one
+            # extra pass after the gate is satisfied before returning.
+            if sse_per_segment < self.config.tolerance_sq and iterations_count > 0:
                 if self.config.verbose:
                     print(f"at {len(segments)} segments, {iterations_count} iterations sse per segment within tolerance. Breaking up")
                 return sse_per_segment
@@ -301,15 +347,35 @@ class FitterToPointsSequence:
     def best_consecutive_segments_separation(self, segment1: SequenceSegment, segment2: SequenceSegment) -> tuple[int, int]:
         """:returns (last index of segment1, first index of segment2),
         between them 0..config.max_orphans_per_junction points may be left orphaned.
-        Orphaning a point costs tolerance_sq, so a point is orphaned iff it lies farther than tolerance from both lines."""
+        The contested window (that is range of points that can change segment they belong to) is scored against each segment's uncontested core-half line,
+        so a junction outlier cannot vouch for itself through its own segment's fit.
+        Orphaning a point costs tolerance_sq, so a point is orphaned iff it lies farther than tolerance from both core lines."""
+
         n = len(self.whole_sequence)
         assert (segment2.first_index - segment1.last_index - 1) % n <= self.config.max_orphans_per_junction
         left_limit = self.lower_mid_index(segment1.first_index, segment1.last_index)
         right_limit = self.lower_mid_index(segment2.first_index, segment2.last_index)
         relevant_points = self.subsequence(left_limit, right_limit)
         assert relevant_points is not None and relevant_points.shape[0] >= 2
-        squared_errors_seg1 = segment1.line_segment_params.squared_distances_to_line(relevant_points)
-        squared_errors_seg2 = segment2.line_segment_params.squared_distances_to_line(relevant_points)
+
+        # Fine-tuning is only sound when both lines already fit their points well.
+        both_fits_within_tolerance = (
+            segment1.line_segment_params.loss / segment1.points_count() <= self.config.tolerance_sq
+            and segment2.line_segment_params.loss / segment2.points_count() <= self.config.tolerance_sq)
+        if both_fits_within_tolerance:
+            # Score against the uncontested core halves: a junction outlier cannot vouch for itself through the fit it has dragged.
+            # The core's outer end may itself hold an undetected outlier of the neighboring junction, so trim up to max_orphans_per_junction points there.
+            trim1 = max(0, min(self.config.max_orphans_per_junction,
+                               self.points_count(segment1.first_index, left_limit) - MIN_SEGMENT_POINTS))
+            trim2 = max(0, min(self.config.max_orphans_per_junction,
+                               self.points_count(right_limit, segment2.last_index) - MIN_SEGMENT_POINTS))
+            squared_errors_seg1 = self._squared_errors_to_core_line(
+                (segment1.first_index + trim1) % n, left_limit, segment1.line_segment_params, relevant_points)
+            squared_errors_seg2 = self._squared_errors_to_core_line(
+                right_limit, (segment2.last_index - trim2) % n, segment2.line_segment_params, relevant_points)
+        else:
+            squared_errors_seg1 = segment1.line_segment_params.squared_distances_to_line(relevant_points)
+            squared_errors_seg2 = segment2.line_segment_params.squared_distances_to_line(relevant_points)
         w = relevant_points.shape[0]
         head_cum = squared_errors_seg1.cumsum()              # head_cum[i] = seg1 cost of window points [0..i]
         tail_cum = squared_errors_seg2[::-1].cumsum()[::-1]  # tail_cum[j] = seg2 cost of window points [j..w-1]
@@ -319,11 +385,6 @@ class FitterToPointsSequence:
         best_i = int(np.argmin(costs))
         best_cost = costs[best_i]
 
-        # Orphaning decisions are only sound when both lines already fit their points well.
-        # Against coarse intermediate fits stay gapless (orphaning would hide exactly the high-error points that must drive further splits).
-        both_fits_within_tolerance = (
-            segment1.line_segment_params.loss / segment1.points_count() <= self.config.tolerance_sq
-            and segment2.line_segment_params.loss / segment2.points_count() <= self.config.tolerance_sq)
         if not both_fits_within_tolerance:
             return (left_limit + best_i) % n, (left_limit + best_i + 1) % n
 
