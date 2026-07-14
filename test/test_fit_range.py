@@ -2,7 +2,7 @@
 import numpy as np
 import pytest
 
-from mask2polymin.fit_line_segment import principal_axis, subsequence, fit_range
+from mask2polymin.sequence_moments import principal_axis, subsequence, fit_range
 from mask2polymin.fit_to_points_sequence import FitterToPointsSequence
 from fit_line_segment_reference import fit_line_segment
 

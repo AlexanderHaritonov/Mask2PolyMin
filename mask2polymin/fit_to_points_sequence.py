@@ -1,7 +1,7 @@
 import numpy as np
 from dataclasses import dataclass
 
-from mask2polymin.fit_line_segment import subsequence, fit_range, refit_segment, SequenceMoments
+from mask2polymin.sequence_moments import subsequence, fit_range, refit_segment, SequenceMoments
 from mask2polymin.line_segment_params import LineSegmentParams
 from mask2polymin.polyline import segments_to_polyline
 from mask2polymin.sequence_segment import SequenceSegment
