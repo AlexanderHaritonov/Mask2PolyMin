@@ -27,12 +27,6 @@ class SequenceSegment:
             line_segment_params=self.line_segment_params  # immutable, safe to share
         )
 
-def subsequence(sequence: np.ndarray, left, right) -> np.ndarray:
-    if left < right:
-        return sequence[left:right+1]
-    else:
-        return np.vstack([ sequence[left:], sequence[:right+1] ])
-
 def print_segments_info(segments):
     print("\n" + "=" * 60)
     print("Segment Details:")

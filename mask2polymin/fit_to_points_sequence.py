@@ -1,9 +1,9 @@
 import numpy as np
 from dataclasses import dataclass
 
-from mask2polymin.fit_line_segment import principal_axis
+from mask2polymin.fit_line_segment import principal_axis, subsequence
 from mask2polymin.line_segment_params import LineSegmentParams
-from mask2polymin.sequence_segment import SequenceSegment, subsequence
+from mask2polymin.sequence_segment import SequenceSegment
 
 PLOT_SEGMENTS = False
 
@@ -149,7 +149,7 @@ class FitterToPointsSequence:
             # The mean-based check alone lets a long segment absorb a few far-off
             # points around a corner, so also split when any single point is
             # farther than tolerance from the fitted line.
-            points = self.subsequence(segment.first_index, segment.last_index)
+            points = subsequence(self.whole_sequence, segment.first_index, segment.last_index)
             return segment.line_segment_params.squared_distances_to_line(points).max() > self.config.tolerance_sq
 
         eligible = [i for i in range(len(segments)) if needs_split(segments[i])]
@@ -169,9 +169,6 @@ class FitterToPointsSequence:
                 return mid_index
             else:
                 return mid_index - l
-
-    def subsequence(self, left, right) -> np.ndarray:
-        return subsequence(self.whole_sequence, left, right)
 
     def points_count(self, first_index, last_index) -> int:
         if last_index > first_index:
@@ -209,7 +206,7 @@ class FitterToPointsSequence:
                 direction=np.array([1.0, 0.0], dtype=np.float64),
                 loss=0.0)
 
-        projections = (self.subsequence(first_index, last_index) - centroid) @ direction
+        projections = (subsequence(self.whole_sequence, first_index, last_index) - centroid) @ direction
         # principal_axis eigenvalues come from the population covariance (divide by count);
         # fit_line_segment's come from np.cov's sample covariance (ddof=1, divide by count-1).
         # Scale to keep loss/straightness conventions identical.
@@ -353,7 +350,7 @@ class FitterToPointsSequence:
         assert (segment2.first_index - segment1.last_index - 1) % n <= self.config.max_orphans_per_junction
         left_limit = self.lower_mid_index(segment1.first_index, segment1.last_index)
         right_limit = self.lower_mid_index(segment2.first_index, segment2.last_index)
-        relevant_points = self.subsequence(left_limit, right_limit)
+        relevant_points = subsequence(self.whole_sequence, left_limit, right_limit)
         assert relevant_points is not None and relevant_points.shape[0] >= 2
 
         # Fine-tuning is only sound when both lines already fit their points well.

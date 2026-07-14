@@ -2,13 +2,13 @@
 import numpy as np
 import pytest
 
-from mask2polymin.fit_line_segment import principal_axis
+from mask2polymin.fit_line_segment import principal_axis, subsequence
 from mask2polymin.fit_to_points_sequence import FitterToPointsSequence
 from fit_line_segment_reference import fit_line_segment
 
 
 def assert_equivalent_fits(fitter, first, last):
-    expected = fit_line_segment(fitter.subsequence(first, last))
+    expected = fit_line_segment(subsequence(fitter.whole_sequence, first, last))
     actual = fitter.fit_range(first, last)
 
     # direction: same line; sign may differ (eigenvector sign is arbitrary)
@@ -65,7 +65,7 @@ def test_single_point_range_raises():
 def test_identical_points_degenerate():
     points = np.array([[5, 5]] * 4 + [[6, 7], [7, 9]], dtype=np.float64)
     fitter = FitterToPointsSequence(points)
-    expected = fit_line_segment(fitter.subsequence(0, 3))
+    expected = fit_line_segment(subsequence(fitter.whole_sequence, 0, 3))
     actual = fitter.fit_range(0, 3)
     np.testing.assert_allclose(actual.start_point, expected.start_point, atol=1e-9)
     np.testing.assert_allclose(actual.end_point, expected.end_point, atol=1e-9)
