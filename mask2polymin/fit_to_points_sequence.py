@@ -1,7 +1,7 @@
 import numpy as np
 from dataclasses import dataclass
 
-from mask2polymin.fit_line_segment import subsequence, fit_range, SequenceMoments
+from mask2polymin.fit_line_segment import subsequence, fit_range, refit_segment, SequenceMoments
 from mask2polymin.line_segment_params import LineSegmentParams
 from mask2polymin.sequence_segment import SequenceSegment
 
@@ -172,9 +172,6 @@ class FitterToPointsSequence:
     def _points_minus_orphans_count(self, segments: list[SequenceSegment]) -> int:
         return sum(s.points_count() for s in segments)
 
-    def _refit_segment(self, segment: SequenceSegment) -> None:
-        segment.line_segment_params = fit_range(self._moments, segment.first_index, segment.last_index)
-
     def _squared_errors_to_core_line(self, core_first, core_last, fallback: LineSegmentParams, points) -> np.ndarray:
         """Squared distances of `points` to the TLS line of a segment's uncontested core [core_first..core_last].
           Scoring against the core — never against a line fitted with the contested points themselves — prevents a junction outlier from masking itself by dragging its own segment's fit.
@@ -234,9 +231,9 @@ class FitterToPointsSequence:
                 if boundary_shift > 0:
                     if i == start_segment_index:
                         start_segment_dirty = True
-                    self._refit_segment(segments[i+1])
+                    refit_segment(self._moments, segments[i+1])
             if start_segment_dirty:
-                self._refit_segment(segments[start_segment_index])
+                refit_segment(self._moments, segments[start_segment_index])
 
             reverse_run_start = start_segment_index - 1 if start_segment_index > 0 else len(segments) - 2
             segment0_dirty = False
@@ -247,17 +244,17 @@ class FitterToPointsSequence:
                 if boundary_shift > 0:
                     if i == 0:
                         segment0_dirty = True
-                    self._refit_segment(segments[i+1])
+                    refit_segment(self._moments, segments[i+1])
             if segment0_dirty:
-                self._refit_segment(segments[0])
+                refit_segment(self._moments, segments[0])
 
             if self.is_closed:
                 boundary_shift = find_optimal_break_and_adjust(segments[-1], segments[0])
                 if boundary_shift > 1:
                     changes_count += 1
                 if boundary_shift > 0:
-                    self._refit_segment(segments[-1])
-                    self._refit_segment(segments[0])
+                    refit_segment(self._moments, segments[-1])
+                    refit_segment(self._moments, segments[0])
 
             # Point-weighted mean of per-segment SSE for evenly sized segments. Plus "penalty":
             # Each orphan is charged one tolerance-sized outlier, spread over the segments, so orphaning is never free in the stop/improvement gates.

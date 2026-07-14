@@ -3,6 +3,7 @@ import math
 import numpy as np
 
 from mask2polymin.line_segment_params import LineSegmentParams
+from mask2polymin.sequence_segment import SequenceSegment
 
 
 def principal_axis(cov_xx: float, cov_yy: float, cov_xy: float) -> tuple[np.ndarray, float, float]:
@@ -74,3 +75,7 @@ def fit_range(moments: SequenceMoments, first_index: int, last_index: int) -> Li
         direction=direction,
         loss=loss,
         straightness=straightness)
+
+
+def refit_segment(moments: SequenceMoments, segment: SequenceSegment) -> None:
+    segment.line_segment_params = fit_range(moments, segment.first_index, segment.last_index)
