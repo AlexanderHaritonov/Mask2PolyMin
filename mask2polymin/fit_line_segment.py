@@ -22,18 +22,30 @@ def subsequence(sequence: np.ndarray, left, right) -> np.ndarray:
         return np.vstack([ sequence[left:], sequence[:right+1] ])
 
 
-def range_moments(stat_moments: np.ndarray, sequence_length: int, first_index: int, last_index: int) -> tuple[np.ndarray, int]:
-    M = stat_moments
+class SequenceMoments:
+    """Precomputed statistical moments of a point sequence, enabling O(1) TLS line fit of any contiguous (possibly wrapping) index range."""
+    def __init__(self, whole_sequence: np.ndarray):
+        self.whole_sequence = whole_sequence
+        self.sequence_center = whole_sequence.mean(axis=0).astype(np.float64)
+
+        # Cumulative sums of statistical moments [Σx, Σy, Σx², Σy², Σxy] for sequence prefixes over globally centered coordinates.
+        # Centering keeps the moment differences numerically stable.
+        x, y = (whole_sequence - self.sequence_center).astype(np.float64).T
+        self.stat_moments = np.zeros((len(x) + 1, 5))
+        np.cumsum(np.stack([x, y, x * x, y * y, x * y], axis=1), axis=0, out=self.stat_moments[1:])
+
+
+def range_moments(moments: SequenceMoments, first_index: int, last_index: int) -> tuple[np.ndarray, int]:
+    M = moments.stat_moments
     if first_index <= last_index:
         return M[last_index + 1] - M[first_index], last_index - first_index + 1
     else:  # circular wrap
-        return M[-1] - M[first_index] + M[last_index + 1], sequence_length - first_index + last_index + 1
+        return M[-1] - M[first_index] + M[last_index + 1], len(moments.whole_sequence) - first_index + last_index + 1
 
 
-def fit_range(sequence: np.ndarray, stat_moments: np.ndarray, sequence_center: np.ndarray,
-              first_index: int, last_index: int) -> LineSegmentParams:
+def fit_range(moments: SequenceMoments, first_index: int, last_index: int) -> LineSegmentParams:
     # TLS line fit through the points of a contiguous (possibly wrapping) index range, from the prefix moments.
-    (sx, sy, sxx, syy, sxy), count = range_moments(stat_moments, len(sequence), first_index, last_index)
+    (sx, sy, sxx, syy, sxy), count = range_moments(moments, first_index, last_index)
     if count < 2:
         raise ValueError("Need at least 2 points to fit a line.")
     mean_x, mean_y = sx / count, sy / count
@@ -41,7 +53,7 @@ def fit_range(sequence: np.ndarray, stat_moments: np.ndarray, sequence_center: n
     cov_yy = syy / count - mean_y * mean_y
     cov_xy = sxy / count - mean_x * mean_y
     direction, eig_max, eig_min = principal_axis(cov_xx, cov_yy, cov_xy)
-    centroid = np.array([mean_x, mean_y]) + sequence_center
+    centroid = np.array([mean_x, mean_y]) + moments.sequence_center
 
     if eig_max <= 1e-8:  # degenerate: all points identical (same threshold scale as fit_line_segment's allclose)
         return LineSegmentParams(
@@ -50,7 +62,7 @@ def fit_range(sequence: np.ndarray, stat_moments: np.ndarray, sequence_center: n
             direction=np.array([1.0, 0.0], dtype=np.float64),
             loss=0.0)
 
-    projections = (subsequence(sequence, first_index, last_index) - centroid) @ direction
+    projections = (subsequence(moments.whole_sequence, first_index, last_index) - centroid) @ direction
     # principal_axis eigenvalues come from the population covariance (divide by count);
     # fit_line_segment's come from np.cov's sample covariance (ddof=1, divide by count-1).
     # Scale to keep loss/straightness conventions identical.

@@ -8,7 +8,7 @@ from fit_line_segment_reference import fit_line_segment
 
 
 def fitter_fit_range(fitter, first, last):
-    return fit_range(fitter.whole_sequence, fitter._stat_moments, fitter._sequence_center, first, last)
+    return fit_range(fitter._moments, first, last)
 
 
 def assert_equivalent_fits(fitter, first, last):
