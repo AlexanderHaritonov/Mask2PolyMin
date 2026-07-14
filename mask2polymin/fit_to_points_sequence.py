@@ -169,9 +169,6 @@ class FitterToPointsSequence:
         else:
             return len(self.whole_sequence) - first_index + last_index + 1 # for closed polygon / circular case
 
-    def _points_minus_orphans_count(self, segments: list[SequenceSegment]) -> int:
-        return sum(s.points_count() for s in segments)
-
     def _squared_errors_to_core_line(self, core_first, core_last, fallback: LineSegmentParams, points) -> np.ndarray:
         """Squared distances of `points` to the TLS line of a segment's uncontested core [core_first..core_last].
           Scoring against the core — never against a line fitted with the contested points themselves — prevents a junction outlier from masking itself by dragging its own segment's fit.
@@ -258,7 +255,7 @@ class FitterToPointsSequence:
 
             # Point-weighted mean of per-segment SSE for evenly sized segments. Plus "penalty":
             # Each orphan is charged one tolerance-sized outlier, spread over the segments, so orphaning is never free in the stop/improvement gates.
-            assigned_count = self._points_minus_orphans_count(segments)
+            assigned_count = sum(s.points_count() for s in segments)
             orphans_count = len(self.whole_sequence) - assigned_count
             orphans_penalty = orphans_count * self.config.tolerance_sq / len(segments)
             sse_per_segment = (sum(s.line_segment_params.loss * s.points_count() for s in segments) / assigned_count
