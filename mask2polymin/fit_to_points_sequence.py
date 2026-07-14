@@ -1,7 +1,7 @@
 import numpy as np
 from dataclasses import dataclass
 
-from mask2polymin.fit_line_segment import principal_axis, subsequence
+from mask2polymin.fit_line_segment import subsequence, fit_range
 from mask2polymin.line_segment_params import LineSegmentParams
 from mask2polymin.sequence_segment import SequenceSegment
 
@@ -60,7 +60,9 @@ class FitterToPointsSequence:
         return self._merge_collinear_segments(segments_sequence)
 
     def _fit(self) -> list[SequenceSegment]:
-        segment_params: LineSegmentParams = self.fit_range(0, len(self.whole_sequence) - 1)
+        segment_params: LineSegmentParams = fit_range(
+            self.whole_sequence, self._stat_moments, self._sequence_center,
+            0, len(self.whole_sequence) - 1)
         initial_segment = SequenceSegment(
             whole_sequence=self.whole_sequence,
             first_index=0,
@@ -119,7 +121,9 @@ class FitterToPointsSequence:
                 i += 1
                 continue
             combined = subsequence(self.whole_sequence, a.first_index, b.last_index)
-            combined_fit = self.fit_range(a.first_index, b.last_index)
+            combined_fit = fit_range(
+                self.whole_sequence, self._stat_moments, self._sequence_center,
+                a.first_index, b.last_index)
             both_sides_collinear_on_average = combined_fit.loss / len(combined) <= self.config.tolerance_sq
             no_point_off = combined_fit.squared_distances_to_line(combined).max() <= self.config.tolerance_sq
             if both_sides_collinear_on_average and no_point_off:
@@ -179,48 +183,10 @@ class FitterToPointsSequence:
     def points_minus_orphans_count(self, segments: list[SequenceSegment]) -> int:
         return sum(s.points_count() for s in segments)
 
-    def _range_moments(self, first_index, last_index) -> tuple[np.ndarray, int]:
-        M = self._stat_moments
-        if first_index <= last_index:
-            return M[last_index + 1] - M[first_index], last_index - first_index + 1
-        else:  # circular wrap
-            return M[-1] - M[first_index] + M[last_index + 1], len(self.whole_sequence) - first_index + last_index + 1
-
-
-    def fit_range(self, first_index, last_index) -> LineSegmentParams:
-        # TLS line fit through the points of a contiguous (possibly wrapping) index range, from the prefix moments.
-        (sx, sy, sxx, syy, sxy), count = self._range_moments(first_index, last_index)
-        if count < 2:
-            raise ValueError("Need at least 2 points to fit a line.")
-        mean_x, mean_y = sx / count, sy / count
-        cov_xx = sxx / count - mean_x * mean_x
-        cov_yy = syy / count - mean_y * mean_y
-        cov_xy = sxy / count - mean_x * mean_y
-        direction, eig_max, eig_min = principal_axis(cov_xx, cov_yy, cov_xy)
-        centroid = np.array([mean_x, mean_y]) + self._sequence_center
-
-        if eig_max <= 1e-8:  # degenerate: all points identical (same threshold scale as fit_line_segment's allclose)
-            return LineSegmentParams(
-                start_point=centroid,
-                end_point=centroid,
-                direction=np.array([1.0, 0.0], dtype=np.float64),
-                loss=0.0)
-
-        projections = (subsequence(self.whole_sequence, first_index, last_index) - centroid) @ direction
-        # principal_axis eigenvalues come from the population covariance (divide by count);
-        # fit_line_segment's come from np.cov's sample covariance (ddof=1, divide by count-1).
-        # Scale to keep loss/straightness conventions identical.
-        loss = count * max(eig_min, 0.0) * count / (count - 1)
-        straightness = float(eig_min / eig_max) if eig_max > 0 else 0.0
-        return LineSegmentParams(
-            start_point=centroid + projections.min() * direction,
-            end_point=centroid + projections.max() * direction,
-            direction=direction,
-            loss=loss,
-            straightness=straightness)
-
     def refit_segment(self, segment: SequenceSegment) -> None:
-        segment.line_segment_params = self.fit_range(segment.first_index, segment.last_index)
+        segment.line_segment_params = fit_range(
+            self.whole_sequence, self._stat_moments, self._sequence_center,
+            segment.first_index, segment.last_index)
 
     def _squared_errors_to_core_line(self, core_first, core_last, fallback: LineSegmentParams, points) -> np.ndarray:
         """Squared distances of `points` to the TLS line of a segment's uncontested core [core_first..core_last].
@@ -228,7 +194,9 @@ class FitterToPointsSequence:
           Falls back to the segment's current line when the core is too small to define one."""
         if core_first == core_last:  # a single point cannot define a line
             return fallback.squared_distances_to_line(points)
-        core_line = self.fit_range(core_first, core_last)
+        core_line = fit_range(
+            self.whole_sequence, self._stat_moments, self._sequence_center,
+            core_first, core_last)
         if np.array_equal(core_line.start_point, core_line.end_point):  # degenerate: identical points
             return fallback.squared_distances_to_line(points)
         return core_line.squared_distances_to_line(points)
@@ -247,12 +215,16 @@ class FitterToPointsSequence:
             whole_sequence=self.whole_sequence,
             first_index=segment.first_index,
             last_index=pivot_point_index,
-            line_segment_params=self.fit_range(segment.first_index, pivot_point_index))
+            line_segment_params=fit_range(
+                self.whole_sequence, self._stat_moments, self._sequence_center,
+                segment.first_index, pivot_point_index))
         segment2 = SequenceSegment(
             whole_sequence=self.whole_sequence,
             first_index=seg2_first_index,
             last_index=segment.last_index,
-            line_segment_params=self.fit_range(seg2_first_index, segment.last_index))
+            line_segment_params=fit_range(
+                self.whole_sequence, self._stat_moments, self._sequence_center,
+                seg2_first_index, segment.last_index))
 
         # Clone segments before and after the split point
         cloned_before = [seg.clone() for seg in segments[:segment_to_split_index]]

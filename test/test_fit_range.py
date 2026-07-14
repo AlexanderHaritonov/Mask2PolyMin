@@ -2,14 +2,18 @@
 import numpy as np
 import pytest
 
-from mask2polymin.fit_line_segment import principal_axis, subsequence
+from mask2polymin.fit_line_segment import principal_axis, subsequence, fit_range
 from mask2polymin.fit_to_points_sequence import FitterToPointsSequence
 from fit_line_segment_reference import fit_line_segment
 
 
+def fitter_fit_range(fitter, first, last):
+    return fit_range(fitter.whole_sequence, fitter._stat_moments, fitter._sequence_center, first, last)
+
+
 def assert_equivalent_fits(fitter, first, last):
     expected = fit_line_segment(subsequence(fitter.whole_sequence, first, last))
-    actual = fitter.fit_range(first, last)
+    actual = fitter_fit_range(fitter, first, last)
 
     # direction: same line; sign may differ (eigenvector sign is arbitrary)
     assert abs(float(np.dot(expected.direction, actual.direction))) == pytest.approx(1.0, abs=1e-9)
@@ -46,7 +50,7 @@ def test_exact_line_zero_loss():
     points = np.array([[x, 2.0 * x + 1] for x in range(10)], dtype=np.float64)
     fitter = FitterToPointsSequence(points)
     assert_equivalent_fits(fitter, 2, 8)
-    assert fitter.fit_range(2, 8).loss == pytest.approx(0.0, abs=1e-9)
+    assert fitter_fit_range(fitter, 2, 8).loss == pytest.approx(0.0, abs=1e-9)
 
 
 def test_two_point_range():
@@ -59,14 +63,14 @@ def test_single_point_range_raises():
     points = np.array([[0, 0], [1, 0], [2, 1]], dtype=np.float64)
     fitter = FitterToPointsSequence(points)
     with pytest.raises(ValueError):
-        fitter.fit_range(1, 1)
+        fitter_fit_range(fitter, 1, 1)
 
 
 def test_identical_points_degenerate():
     points = np.array([[5, 5]] * 4 + [[6, 7], [7, 9]], dtype=np.float64)
     fitter = FitterToPointsSequence(points)
     expected = fit_line_segment(subsequence(fitter.whole_sequence, 0, 3))
-    actual = fitter.fit_range(0, 3)
+    actual = fitter_fit_range(fitter, 0, 3)
     np.testing.assert_allclose(actual.start_point, expected.start_point, atol=1e-9)
     np.testing.assert_allclose(actual.end_point, expected.end_point, atol=1e-9)
     assert actual.loss == 0.0
