@@ -3,7 +3,6 @@ from dataclasses import dataclass
 from typing import Optional
 
 from mask2polymin.line_segment_params import LineSegmentParams
-from mask2polymin.fit_line_segment import fit_line_segment
 
 @dataclass
 class SequenceSegment:
@@ -18,9 +17,6 @@ class SequenceSegment:
             return self.last_index - self.first_index + 1
         else:
             return len(self.whole_sequence) - self.first_index + self.last_index + 1 # for closed polygon / circular case
-
-    def refit(self) -> None:
-        self.line_segment_params = fit_line_segment(subsequence(self.whole_sequence, self.first_index, self.last_index))
 
     def clone(self) -> 'SequenceSegment':
         """Create a copy of this segment (whole_sequence is shared, line_segment_params is immutable)"""
