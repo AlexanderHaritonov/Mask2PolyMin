@@ -1,7 +1,7 @@
 import numpy as np
 from dataclasses import dataclass
 
-from mask2polymin.fit_line_segment import subsequence, fit_range
+from mask2polymin.fit_line_segment import subsequence, fit_range, SequenceMoments
 from mask2polymin.line_segment_params import LineSegmentParams
 from mask2polymin.sequence_segment import SequenceSegment
 
@@ -46,23 +46,14 @@ class FitterToPointsSequence:
         self.is_closed = is_closed
         self.config = config or FitterConfig()
 
-        self._sequence_center = self.whole_sequence.mean(axis=0).astype(np.float64)
-
-        # Cumulative sums of statistical moments [Σx, Σy, Σx², Σy², Σxy] for sequence prefixes over globally centered coordinates.
-        # This precomputation enables O(1) TLS line fit of any contiguous index range.
-        # Centering keeps the moment differences numerically stable.
-        x, y = (self.whole_sequence - self._sequence_center).astype(np.float64).T
-        self._stat_moments = np.zeros((len(x) + 1, 5))
-        np.cumsum(np.stack([x, y, x * x, y * y, x * y], axis=1), axis=0, out=self._stat_moments[1:])
+        self._moments = SequenceMoments(self.whole_sequence)
 
     def fit(self) -> list[SequenceSegment]:
         segments_sequence = self._fit()
         return self._merge_collinear_segments(segments_sequence)
 
     def _fit(self) -> list[SequenceSegment]:
-        segment_params: LineSegmentParams = fit_range(
-            self.whole_sequence, self._stat_moments, self._sequence_center,
-            0, len(self.whole_sequence) - 1)
+        segment_params: LineSegmentParams = fit_range(self._moments, 0, len(self.whole_sequence) - 1)
         initial_segment = SequenceSegment(
             whole_sequence=self.whole_sequence,
             first_index=0,
@@ -121,9 +112,7 @@ class FitterToPointsSequence:
                 i += 1
                 continue
             combined = subsequence(self.whole_sequence, a.first_index, b.last_index)
-            combined_fit = fit_range(
-                self.whole_sequence, self._stat_moments, self._sequence_center,
-                a.first_index, b.last_index)
+            combined_fit = fit_range(self._moments, a.first_index, b.last_index)
             both_sides_collinear_on_average = combined_fit.loss / len(combined) <= self.config.tolerance_sq
             no_point_off = combined_fit.squared_distances_to_line(combined).max() <= self.config.tolerance_sq
             if both_sides_collinear_on_average and no_point_off:
@@ -184,9 +173,7 @@ class FitterToPointsSequence:
         return sum(s.points_count() for s in segments)
 
     def refit_segment(self, segment: SequenceSegment) -> None:
-        segment.line_segment_params = fit_range(
-            self.whole_sequence, self._stat_moments, self._sequence_center,
-            segment.first_index, segment.last_index)
+        segment.line_segment_params = fit_range(self._moments, segment.first_index, segment.last_index)
 
     def _squared_errors_to_core_line(self, core_first, core_last, fallback: LineSegmentParams, points) -> np.ndarray:
         """Squared distances of `points` to the TLS line of a segment's uncontested core [core_first..core_last].
@@ -194,9 +181,7 @@ class FitterToPointsSequence:
           Falls back to the segment's current line when the core is too small to define one."""
         if core_first == core_last:  # a single point cannot define a line
             return fallback.squared_distances_to_line(points)
-        core_line = fit_range(
-            self.whole_sequence, self._stat_moments, self._sequence_center,
-            core_first, core_last)
+        core_line = fit_range(self._moments, core_first, core_last)
         if np.array_equal(core_line.start_point, core_line.end_point):  # degenerate: identical points
             return fallback.squared_distances_to_line(points)
         return core_line.squared_distances_to_line(points)
@@ -215,16 +200,12 @@ class FitterToPointsSequence:
             whole_sequence=self.whole_sequence,
             first_index=segment.first_index,
             last_index=pivot_point_index,
-            line_segment_params=fit_range(
-                self.whole_sequence, self._stat_moments, self._sequence_center,
-                segment.first_index, pivot_point_index))
+            line_segment_params=fit_range(self._moments, segment.first_index, pivot_point_index))
         segment2 = SequenceSegment(
             whole_sequence=self.whole_sequence,
             first_index=seg2_first_index,
             last_index=segment.last_index,
-            line_segment_params=fit_range(
-                self.whole_sequence, self._stat_moments, self._sequence_center,
-                seg2_first_index, segment.last_index))
+            line_segment_params=fit_range(self._moments, seg2_first_index, segment.last_index))
 
         # Clone segments before and after the split point
         cloned_before = [seg.clone() for seg in segments[:segment_to_split_index]]
