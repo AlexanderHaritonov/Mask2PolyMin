@@ -64,8 +64,6 @@ Tests run headless by default (no plot windows). To show plots during a test run
 SHOW_PLOTS=1 .venv/bin/pytest test/
 ```
 
-In VSCode, right-click the `test/` folder → **Run Tests**. Plots are shown automatically (configured via `.vscode/settings.json`).
-
 Install dev dependencies first if needed: `pip install -r requirements-dev.txt`
 
 

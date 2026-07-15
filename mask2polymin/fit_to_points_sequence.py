@@ -211,50 +211,35 @@ class FitterToPointsSequence:
             # we go in the direction of increasing index and for each segment:
             #   1. find out where the border to the next consecutive segment should be
             #   2. adjust where the previous segment ends and the next segment starts
-            #   3. re-fit the current segment.
+            #   3. re-fit both segments.
 
             def find_optimal_break_and_adjust(previous_segment, next_segment)->int:
                 new_last, new_first, boundary_shift = self.best_consecutive_segments_separation(previous_segment, next_segment)
                 if boundary_shift > 0:
                     previous_segment.last_index = new_last
                     next_segment.first_index = new_first
+                    refit_segment(self._moments, previous_segment)
+                    refit_segment(self._moments, next_segment)
 
                 return boundary_shift
 
             changes_count = 0
 
-            start_segment_dirty = False
             for i in range(start_segment_index, len(segments) - 1):
                 boundary_shift = find_optimal_break_and_adjust(segments[i], segments[i+1])
                 if boundary_shift > 1:
                     changes_count += 1
-                if boundary_shift > 0:
-                    if i == start_segment_index:
-                        start_segment_dirty = True
-                    refit_segment(self._moments, segments[i+1])
-            if start_segment_dirty:
-                refit_segment(self._moments, segments[start_segment_index])
 
             reverse_run_start = start_segment_index - 1 if start_segment_index > 0 else len(segments) - 2
-            segment0_dirty = False
             for i in range(reverse_run_start, -1, -1):
                 boundary_shift = find_optimal_break_and_adjust(segments[i], segments[i+1])
                 if boundary_shift > 1:
                     changes_count += 1
-                if boundary_shift > 0:
-                    if i == 0:
-                        segment0_dirty = True
-                    refit_segment(self._moments, segments[i+1])
-            if segment0_dirty:
-                refit_segment(self._moments, segments[0])
 
             if self.is_closed:
                 boundary_shift = find_optimal_break_and_adjust(segments[-1], segments[0])
                 if boundary_shift > 1:
                     changes_count += 1
-                if boundary_shift > 0:
-                    refit_segment(self._moments, segments[-1])
-                    refit_segment(self._moments, segments[0])
 
             # Point-weighted mean of per-segment SSE for evenly sized segments. Plus "penalty":
             # Each orphan is charged one tolerance-sized outlier, spread over the segments, so orphaning is never free in the stop/improvement gates.
