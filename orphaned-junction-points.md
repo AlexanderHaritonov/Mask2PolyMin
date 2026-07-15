@@ -27,11 +27,11 @@ They model the truth — a point on the corner arc lies on neither line.
 
 | Constant | Value | Rationale |
 |---|---|---|
-| `MAX_ORPHANS_PER_JUNCTION` | `2` | Cap on gap size. On 1-px binary contours only 1 point per junction ever qualifies, so 2 is free headroom; the penalty rule keeps orphaning data-driven. Named module constant, not a config knob. |
+| `max_orphans_per_junction` | `2` (default) | Cap on gap size. On 1-px binary contours only 1 point per junction ever qualifies, so 2 is free headroom; the penalty rule keeps orphaning data-driven. Implemented as a `FitterConfig` field. |
 | orphan penalty | `config.tolerance_sq` per orphaned point | Orphaning saves `min(d₁², d₂²)` from the objective and costs one penalty ⇒ a point is orphaned **iff** it lies farther than `tolerance` from *both* lines. Same semantics as the split gate; no new knob. |
 | `MIN_SEGMENT_POINTS` | `2` | Hard floor for a line fit. The separation search never accepts an orphaning candidate that squeezes either neighbor below it. |
 
-Both constants go at module level in `mask2polymin/fit_to_points_sequence.py`.
+`MIN_SEGMENT_POINTS` is a module-level constant in `mask2polymin/fit_to_points_sequence.py`; `max_orphans_per_junction` is a field of `FitterConfig` there.
 
 ---
 

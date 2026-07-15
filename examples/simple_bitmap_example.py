@@ -68,15 +68,12 @@ def show_contour(bitmap, contour):
 
 
 # Step 5: Fit polygon using FitterToPointsSequence
-def fit_polygon(contour, verbose = True):
+def fit_polygon(contour, verbose=False):
     """
     Fit line segments to contour using FitterToPointsSequence.
 
     Args:
         contour: numpy array of contour points
-        is_closed: Whether the contour is closed
-        max_segments: Maximum number of segments to fit
-        tolerance: Fitting tolerance
         verbose: Print fitting progress
 
     Returns:
@@ -92,8 +89,7 @@ def fit_polygon(contour, verbose = True):
             max_segments_count=15,
             max_adjust_iterations=20,
             tolerance=0.2,
-            #verbose=verbose
-            verbose=False
+            verbose=verbose
         )
     )
 
