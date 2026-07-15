@@ -49,9 +49,10 @@ class FitterToPointsSequence:
 
         self._moments = SequenceMoments(self.whole_sequence)
 
+    def fit(self) -> tuple[np.ndarray, list[SequenceSegment]]:
         segments_sequence = self._fit()
         segments = self._merge_collinear_segments(segments_sequence)
-        polygon = segments_to_polyline(segments, is_closed=self.is_closed)
+        polygon = segments_to_polyline(segments, is_closed=self.is_closed, tolerance=self.config.tolerance)
         return polygon, segments
 
     def _fit(self) -> list[SequenceSegment]:

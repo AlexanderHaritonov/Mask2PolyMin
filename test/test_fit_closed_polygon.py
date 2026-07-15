@@ -19,7 +19,7 @@ def test_fit_closed_polygon_four_segments():
         config=FitterConfig(max_segments_count=10, tolerance=0.001, verbose=False)
     )
 
-    polygon, segments = fitter.fit()
+    _polygon, segments = fitter.fit()
     print_segments_info(segments)
     plot_segments(segments)
 
@@ -62,7 +62,7 @@ def test_fit_closed_polygon_four_segments_rotated_45deg():
         config=FitterConfig(max_segments_count=10, tolerance=0.001, verbose=False)
     )
 
-    polygon, segments = fitter.fit()
+    _polygon, segments = fitter.fit()
     print_segments_info(segments)
     plot_segments(segments)
 

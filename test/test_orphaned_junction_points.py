@@ -104,7 +104,7 @@ def vertex_errors(segments):
 def test_displaced_corners_end_to_end():
     pts = square_contour(corner_displacement=1.5)
     fitter = FitterToPointsSequence(pts, is_closed=True, config=FitterConfig(tolerance=1.0))
-    segments = fitter.fit()
+    _, segments = fitter.fit()
 
     assert len(segments) == 4
     gaps = junction_gaps(segments, len(fitter.whole_sequence))
@@ -116,7 +116,7 @@ def test_displaced_corners_end_to_end():
 def test_displaced_corners_all_orphaned_strict():
     pts = square_contour(corner_displacement=1.5)
     fitter = FitterToPointsSequence(pts, is_closed=True, config=FitterConfig(tolerance=1.0))
-    segments = fitter.fit()
+    _, segments = fitter.fit()
 
     assert len(segments) == 4
     gaps = junction_gaps(segments, len(fitter.whole_sequence))
@@ -129,7 +129,7 @@ def test_displaced_corners_all_orphaned_strict():
 def test_clean_square_has_no_orphans():
     pts = square_contour(corner_displacement=0.0)
     fitter = FitterToPointsSequence(pts, is_closed=True, config=FitterConfig(tolerance=1.0))
-    segments = fitter.fit()
+    _, segments = fitter.fit()
 
     assert len(segments) == 4
     assert all(g == 0 for g in junction_gaps(segments, len(fitter.whole_sequence)))
