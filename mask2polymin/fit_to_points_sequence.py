@@ -41,11 +41,18 @@ class FitterToPointsSequence:
                  is_closed: bool = False,
                  config: FitterConfig = None):
 
+        # no-op for float64 (N, 2) ndarray input; coerces lists and integer contours once, up front
+        points_sequence = np.asarray(points_sequence, dtype=np.float64)
+        if points_sequence.ndim != 2 or points_sequence.shape[1] != 2:
+            raise ValueError(f"points_sequence must have shape (N, 2), got {points_sequence.shape}")
+
         # If closed contour and last point equals first point, remove the duplicate
-        if is_closed and np.array_equal(points_sequence[0], points_sequence[-1]):
+        if is_closed and len(points_sequence) > 0 and np.array_equal(points_sequence[0], points_sequence[-1]):
             self.whole_sequence = points_sequence[:-1]
         else:
             self.whole_sequence = points_sequence
+        if len(self.whole_sequence) < 2:
+            raise ValueError(f"points_sequence must contain at least 2 points (excluding the closing duplicate), got {len(self.whole_sequence)}")
         self.is_closed = is_closed
         self.config = config or FitterConfig()
 
@@ -283,7 +290,7 @@ class FitterToPointsSequence:
         left_limit = self._lower_mid_index(segment1.first_index, segment1.last_index)
         right_limit = self._lower_mid_index(segment2.first_index, segment2.last_index)
         relevant_points = subsequence(self.whole_sequence, left_limit, right_limit)
-        assert relevant_points is not None and relevant_points.shape[0] >= 2
+        assert relevant_points.shape[0] >= 2
 
         # current cut in window coordinates: both ends lie inside the window, so plain
         # differences against them give the true shift with no circular-distance handling
