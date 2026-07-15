@@ -40,8 +40,7 @@ def print_segments_info(segments):
         print(f"  End point: [{params.end_point[0]:.2f}, {params.end_point[1]:.2f}]")
         print(f"  Direction: [{params.direction[0]:.4f}, {params.direction[1]:.4f}]")
 
-    # Step 6: Show fitted polygon
+    # Show fitted polygon
     print("\n" + "=" * 60)
-    print("STEP 6: Showing fitted polygon")
     print("=" * 60)
 

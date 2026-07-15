@@ -29,9 +29,11 @@ class FitterConfig:
     max_orphans_per_junction: int = 2
     verbose: bool = False
 
-    def __post_init__(self):
-        # squared form used internally for L2 comparisons
-        self.tolerance_sq = self.tolerance ** 2
+    @property
+    def tolerance_sq(self) -> float:
+        # squared form used internally for L2 comparisons; derived on access so it
+        # can never desync from a later change to tolerance
+        return self.tolerance ** 2
 
 class FitterToPointsSequence:
     def __init__(self,
