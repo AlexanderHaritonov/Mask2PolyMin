@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from mask2polymin.sequence_moments import subsequence, fit_range, refit_segment, SequenceMoments, DEGENERATE_STRAIGHTNESS
 from mask2polymin.line_segment_params import LineSegmentParams
 from mask2polymin.polyline import segments_to_polyline
-from mask2polymin.sequence_segment import SequenceSegment
+from mask2polymin.sequence_segment import SequenceSegment, points_count
 
 PLOT_SEGMENTS = False
 
@@ -175,14 +175,6 @@ class FitterToPointsSequence:
             else:
                 return mid_index - l
 
-    def _points_count(self, first_index, last_index) -> int:
-        # Range convention: first <= last is the linear range [first..last] (equal indices = a single point),
-        # first > last wraps past the end; the full circle is [0..n-1].
-        if last_index >= first_index:
-            return last_index - first_index + 1
-        else:
-            return len(self.whole_sequence) - first_index + last_index + 1 # for closed polygon / circular case
-
     def _squared_errors_to_core_line(self, core_first, core_last, fallback: LineSegmentParams, points) -> np.ndarray:
         """Squared distances of `points` to the TLS line of a segment's uncontested core [core_first..core_last].
           Scoring against the core — never against a line fitted with the contested points themselves — prevents a junction outlier from masking itself by dragging its own segment's fit.
@@ -305,9 +297,9 @@ class FitterToPointsSequence:
             # Score against the uncontested core halves: a junction outlier cannot vouch for itself through the fit it has dragged.
             # The core's outer end may itself hold an undetected outlier of the neighboring junction, so trim up to max_orphans_per_junction points there.
             trim1 = max(0, min(self.config.max_orphans_per_junction,
-                               self._points_count(segment1.first_index, left_limit) - MIN_SEGMENT_POINTS))
+                               points_count(n, segment1.first_index, left_limit) - MIN_SEGMENT_POINTS))
             trim2 = max(0, min(self.config.max_orphans_per_junction,
-                               self._points_count(right_limit, segment2.last_index) - MIN_SEGMENT_POINTS))
+                               points_count(n, right_limit, segment2.last_index) - MIN_SEGMENT_POINTS))
             squared_errors_seg1 = self._squared_errors_to_core_line(
                 (segment1.first_index + trim1) % n, left_limit, segment1.line_segment_params, relevant_points)
             squared_errors_seg2 = self._squared_errors_to_core_line(
@@ -320,9 +312,9 @@ class FitterToPointsSequence:
 
         # points outside the contested window always stay with their segment
         retained1_outside = (0 if left_limit == segment1.first_index
-                             else self._points_count(segment1.first_index, left_limit) - 1)
+                             else points_count(n, segment1.first_index, left_limit) - 1)
         retained2_outside = (0 if right_limit == segment2.last_index
-                             else self._points_count(right_limit, segment2.last_index) - 1)
+                             else points_count(n, right_limit, segment2.last_index) - 1)
 
         # refuse to starve either segment below two points, the minimum needed to fit a line
         w = relevant_points.shape[0]
