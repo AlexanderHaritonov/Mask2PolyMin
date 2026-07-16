@@ -267,7 +267,7 @@ class FitterToPointsSequence:
                 if boundary_shift > 1:
                     changes_count += 1
 
-            reverse_run_start = start_segment_index - 1 if start_segment_index > 0 else len(segments) - 2
+            reverse_run_start = start_segment_index - 1
             for i in range(reverse_run_start, -1, -1):
                 boundary_shift = find_optimal_break_and_adjust(i, segments[i], segments[i+1])
                 if boundary_shift > 1:
