@@ -72,9 +72,6 @@ def visualize_edge_with_fit(edge_points, params, title):
 
 
 if __name__ == '__main__':
-    import os
-    import sys
-    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     for edge, title in [(TEST_EDGE1, "Test Edge 1 with Fitted Line"), (TEST_EDGE2, "Test Edge 2 with Fitted Line")]:
         points = np.array(edge, dtype=np.float64)
         params = fit_line_segment(points)
