@@ -84,14 +84,39 @@ def test_closed_wraparound_merge():
     result = fitter._merge_collinear_segments(segments)
 
     assert len(result) == 4
-    # The merged bottom side comes first and wraps past the end of the sequence
-    merged = result[0]
+    # The merged bottom side wraps past the end of the sequence; a wrap merge appends it at the end of the ring
+    merged = result[-1]
     assert merged.first_index == 21
     assert merged.last_index == 3
     assert merged.points_count() == 7
     assert merged.line_segment_params.loss == 0.0
-    # The three untouched sides keep their order after the merged one
-    assert [(s.first_index, s.last_index) for s in result[1:]] == [(4, 9), (10, 15), (16, 20)]
+    # The three untouched sides keep their order before the merged one
+    assert [(s.first_index, s.last_index) for s in result[:-1]] == [(4, 9), (10, 15), (16, 20)]
+
+
+def test_wraparound_merge_enables_forward_neighbour_merge():
+    # Circular order D -> A -> B -> C: the run D+A+B belongs on one line, but B starts with a leverage
+    # point 0.9 px high whose distance to the short A∪B combined fit exceeds tolerance, so (A, B) alone
+    # must not merge; only after the wrap-around merge (D, A) does the long flat combined fit bring that
+    # point back within tolerance. The walk must therefore re-examine (merged, B) after a wrap merge.
+    a = [[0, -0.9], [1, -0.9]]                       # indices 0..1
+    b = [[2, 0.9]] + [[x, 0] for x in range(3, 13)]  # indices 2..12, leverage point first
+    c = [[13, y] for y in range(1, 6)]               # indices 13..17, vertical: never merges
+    d = [[x, 0] for x in range(-10, 0)]              # indices 18..27, wraps around to a
+    seq = np.array(a + b + c + d, dtype=float)
+    fitter = FitterToPointsSequence(seq, is_closed=True)
+    segments = make_segments(fitter, [(0, 1), (2, 12), (13, 17), (18, 27)])
+
+    # fixture premise: the A∪B combined fit alone leaves the leverage point beyond tolerance
+    ab_fit = fit_range(fitter._moments, 0, 12)
+    assert ab_fit.squared_distances_to_line(seq[0:13]).max() > 1.0
+
+    result = fitter._merge_collinear_segments(segments)
+
+    assert len(result) == 2
+    merged = result[-1]
+    assert (merged.first_index, merged.last_index) == (18, 12)  # D + A + B, wrapping past the end
+    assert (result[0].first_index, result[0].last_index) == (13, 17)
 
 
 def test_short_stub_with_noisy_direction_still_merges():

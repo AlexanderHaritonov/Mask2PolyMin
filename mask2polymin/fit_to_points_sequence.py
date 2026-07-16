@@ -127,7 +127,7 @@ class FitterToPointsSequence:
             a = segments[i]
             b = segments[(i + 1) % n]
             
-            # cheap pre-check: skip pairs whose directions diverge by more than ~11°;
+            # cheap pre-check: skip pairs whose directions diverge too much;
             # bypassed when either segment is too short for a trustworthy direction estimate
             directions_trustworthy = (a.points_count() >= MIN_POINTS_FOR_DIRECTION
                                       and b.points_count() >= MIN_POINTS_FOR_DIRECTION)
@@ -148,13 +148,17 @@ class FitterToPointsSequence:
                     first_index=a.first_index,
                     last_index=b.last_index,
                     line_segment_params=combined_fit)
-                if self.is_closed and i == n - 1:
-                    segments = [merged] + segments[1:-1]
-                else:
-                    segments = segments[:i] + [merged] + segments[i+2:]
                 if self.config.verbose:
                     print(f"Merged segments {i} and {(i+1) % n}")
-                i = max(0, i - 1)
+                if self.is_closed and i == n - 1:
+                    # the wrap merge consumed the first and last elements; the list is a ring, so append merged at the END and resume just before it
+                    # the walk then checks exactly the two pairs involving 'merged'.
+                    # All earlier pairs are unchanged and were already checked, so nothing is re-walked.
+                    segments = segments[1:-1] + [merged]
+                    i = max(0, len(segments) - 2)
+                else:
+                    segments = segments[:i] + [merged] + segments[i+2:]
+                    i = max(0, i - 1)
             else:
                 i += 1
         return segments

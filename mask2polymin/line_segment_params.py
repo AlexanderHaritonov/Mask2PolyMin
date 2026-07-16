@@ -18,6 +18,10 @@ class LineSegmentParams:
         d_perp = (points - self.start_point) @ perp_dir  # one gemv, shape (N,)
         return d_perp * d_perp
 
+    # Not used currently, kept for reference: the dimension-agnostic Gram-Schmidt formulation, valid for any dimension.
+    # Production uses squared_distances_to_line above, which exploits that in 2D the perpendicular subspace
+    # of a unit direction is the single vector (-dy, dx), so the computation collapses to one dot product —
+    # no outer product, no (N, D) projection/residual temporaries, roughly 4x fewer flops and allocations.
     def squared_distances_to_line_general(self, points: np.ndarray) -> np.ndarray:
         # Gram-Schmidt decomposition
         # v = (v·d)d + perp
