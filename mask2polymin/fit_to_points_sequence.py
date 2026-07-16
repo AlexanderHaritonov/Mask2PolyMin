@@ -60,6 +60,8 @@ class FitterToPointsSequence:
 
         # no-op for float64 (N, 2) ndarray input; coerces lists and integer contours once, up front
         points_sequence = np.asarray(points_sequence, dtype=np.float64)
+        if points_sequence.ndim == 3 and points_sequence.shape[1] == 1:
+            points_sequence = points_sequence[:, 0, :]  # cv2.findContours' native (N, 1, 2) shape
         if points_sequence.ndim != 2 or points_sequence.shape[1] != 2:
             raise ValueError(f"points_sequence must have shape (N, 2), got {points_sequence.shape}")
 

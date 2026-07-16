@@ -42,7 +42,7 @@ Notes for the two common contour sources:
 | axis order | `(row, col)` | `(x, y)` |
 | coordinates | float, sub-pixel | integer pixel indices |
 | boundary semantics | between pixel centers (half-integers at `level=0.5`) | through the centers of the outermost object pixels — ~0.5 px inside the true region edge |
-| array shape | `(N, 2)` | `(N, 1, 2)` — pass `contour.reshape(-1, 2)` |
+| array shape | `(N, 2)` | `(N, 1, 2)` accepted directly — cv2's general contour shape |
 | density | dense | dense only with `CHAIN_APPROX_NONE` |
 
 - With OpenCV, use `cv2.findContours(..., cv2.CHAIN_APPROX_NONE)`: the common `CHAIN_APPROX_SIMPLE` pre-simplifies collinear runs, starving the least-squares fits of exactly the evidence this algorithm relies on.

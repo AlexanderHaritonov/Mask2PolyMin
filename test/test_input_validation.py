@@ -19,6 +19,17 @@ def test_integer_array_input_is_coerced():
     assert polygon.dtype == np.float64
 
 
+def test_cv2_findcontours_shape_is_accepted():
+    # cv2.findContours returns (N, 1, 2) int32 arrays; must fit identically to the reshaped (N, 2) equivalent
+    cv2_shaped = np.array(L_SHAPE, dtype=np.int32).reshape(-1, 1, 2)
+    polygon_cv2, segments_cv2 = FitterToPointsSequence(cv2_shaped).fit()
+    polygon_plain, segments_plain = FitterToPointsSequence(np.array(L_SHAPE, dtype=np.int32)).fit()
+
+    assert polygon_cv2.dtype == np.float64
+    assert np.array_equal(polygon_cv2, polygon_plain)
+    assert len(segments_cv2) == len(segments_plain)
+
+
 def test_wrong_shape_raises():
     with pytest.raises(ValueError, match=r"shape \(N, 2\)"):
         FitterToPointsSequence(np.zeros(5))            # 1D
