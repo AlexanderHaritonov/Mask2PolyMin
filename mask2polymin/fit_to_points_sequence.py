@@ -36,6 +36,16 @@ class FitterConfig:
     max_orphans_per_junction: int = 2
     verbose: bool = False
 
+    def __post_init__(self):
+        if self.max_segments_count < 1:
+            raise ValueError(f"max_segments_count must be >= 1, got {self.max_segments_count}")
+        if self.max_adjust_iterations < 1:
+            raise ValueError(f"max_adjust_iterations must be >= 1, got {self.max_adjust_iterations}")
+        if self.tolerance <= 0:
+            raise ValueError(f"tolerance must be > 0, got {self.tolerance}")
+        if self.max_orphans_per_junction < 0:
+            raise ValueError(f"max_orphans_per_junction must be >= 0, got {self.max_orphans_per_junction}")
+
     @property
     def tolerance_sq(self) -> float:
         # squared form used internally for L2 comparisons; derived on access so it
