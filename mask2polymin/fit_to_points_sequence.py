@@ -68,11 +68,15 @@ class FitterToPointsSequence:
     def fit(self) -> tuple[np.ndarray, list[SequenceSegment]]:
         segments_sequence = self._fit()
         segments = self._merge_collinear_segments(segments_sequence)
+        # all fits so far skipped the O(n) endpoint-extents pass (start/end points sit at the centroid);
+        # one exact refit per final segment fills in the real extents for the polyline and for callers
+        for segment in segments:
+            refit_segment(self._moments, segment, with_endpoints=True)
         polygon = segments_to_polyline(segments, is_closed=self.is_closed, tolerance=self.config.tolerance)
         return polygon, segments
 
     def _fit(self) -> list[SequenceSegment]:
-        segment_params: LineSegmentParams = fit_range(self._moments, 0, len(self.whole_sequence) - 1)
+        segment_params: LineSegmentParams = fit_range(self._moments, 0, len(self.whole_sequence) - 1, with_endpoints=False)
         initial_segment = SequenceSegment(
             whole_sequence=self.whole_sequence,
             first_index=0,
@@ -138,7 +142,7 @@ class FitterToPointsSequence:
                     i += 1
                     continue
             combined = subsequence(self.whole_sequence, a.first_index, b.last_index)
-            combined_fit = fit_range(self._moments, a.first_index, b.last_index)
+            combined_fit = fit_range(self._moments, a.first_index, b.last_index, with_endpoints=False)
             both_sides_collinear_on_average = combined_fit.loss / len(combined) <= self.config.tolerance_sq
             no_point_off = combined_fit.squared_distances_to_line(combined).max() <= self.config.tolerance_sq
             if both_sides_collinear_on_average and no_point_off:
@@ -213,12 +217,12 @@ class FitterToPointsSequence:
             whole_sequence=self.whole_sequence,
             first_index=segment.first_index,
             last_index=pivot_point_index,
-            line_segment_params=fit_range(self._moments, segment.first_index, pivot_point_index))
+            line_segment_params=fit_range(self._moments, segment.first_index, pivot_point_index, with_endpoints=False))
         segment2 = SequenceSegment(
             whole_sequence=self.whole_sequence,
             first_index=seg2_first_index,
             last_index=segment.last_index,
-            line_segment_params=fit_range(self._moments, seg2_first_index, segment.last_index))
+            line_segment_params=fit_range(self._moments, seg2_first_index, segment.last_index, with_endpoints=False))
 
         # Clone segments before and after the split point
         cloned_before = [seg.clone() for seg in segments[:segment_to_split_index]]
@@ -243,8 +247,8 @@ class FitterToPointsSequence:
             if boundary_shift > 0:
                 previous_segment.last_index = new_last
                 next_segment.first_index = new_first
-                refit_segment(self._moments, previous_segment)
-                refit_segment(self._moments, next_segment)
+                refit_segment(self._moments, previous_segment, with_endpoints=False)
+                refit_segment(self._moments, next_segment, with_endpoints=False)
 
             return boundary_shift
 

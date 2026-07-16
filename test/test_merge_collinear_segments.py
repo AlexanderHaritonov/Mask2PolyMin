@@ -7,7 +7,7 @@ from mask2polymin.fit_to_points_sequence import FitterToPointsSequence
 def make_segment(fitter, first, last):
     # Fit via the fitter's own moments so params match what _merge_collinear_segments recomputes
     return SequenceSegment(fitter.whole_sequence, first, last,
-                           fit_range(fitter._moments, first, last))
+                           fit_range(fitter._moments, first, last, with_endpoints=True))
 
 
 def make_segments(fitter, index_ranges):
@@ -108,7 +108,7 @@ def test_wraparound_merge_enables_forward_neighbour_merge():
     segments = make_segments(fitter, [(0, 1), (2, 12), (13, 17), (18, 27)])
 
     # fixture premise: the A∪B combined fit alone leaves the leverage point beyond tolerance
-    ab_fit = fit_range(fitter._moments, 0, 12)
+    ab_fit = fit_range(fitter._moments, 0, 12, with_endpoints=True)
     assert ab_fit.squared_distances_to_line(seq[0:13]).max() > 1.0
 
     result = fitter._merge_collinear_segments(segments)

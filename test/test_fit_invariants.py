@@ -14,7 +14,7 @@ from mask2polymin.sequence_moments import fit_range
 
 def assert_segments_freshly_fitted(fitter, segments):
     for s in segments:
-        fresh = fit_range(fitter._moments, s.first_index, s.last_index)
+        fresh = fit_range(fitter._moments, s.first_index, s.last_index, with_endpoints=True)
         stored = s.line_segment_params
         # direction: same line; sign may differ (eigenvector sign is arbitrary)
         assert abs(float(np.dot(fresh.direction, stored.direction))) == pytest.approx(1.0, abs=1e-12), \

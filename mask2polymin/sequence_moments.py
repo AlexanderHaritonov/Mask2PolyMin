@@ -49,8 +49,7 @@ def range_moments(moments: SequenceMoments, first_index: int, last_index: int) -
         return M[-1] - M[first_index] + M[last_index + 1], len(moments.whole_sequence) - first_index + last_index + 1
 
 
-def fit_range(moments: SequenceMoments, first_index: int, last_index: int,
-              with_endpoints: bool = True) -> LineSegmentParams:
+def fit_range(moments: SequenceMoments, first_index: int, last_index: int, with_endpoints: bool) -> LineSegmentParams:
     """TLS line fit through the points of a contiguous (possibly wrapping) index range, from the prefix moments.
     with_endpoints=False skips the extreme-projections pass — the only O(n) part — and sets
     start_point == end_point == centroid: still a valid point on the line for distance computations, but not the segment's extent.
@@ -96,5 +95,5 @@ def fit_range(moments: SequenceMoments, first_index: int, last_index: int,
         straightness=straightness)
 
 
-def refit_segment(moments: SequenceMoments, segment: SequenceSegment) -> None:
-    segment.line_segment_params = fit_range(moments, segment.first_index, segment.last_index)
+def refit_segment(moments: SequenceMoments, segment: SequenceSegment, with_endpoints: bool) -> None:
+    segment.line_segment_params = fit_range(moments, segment.first_index, segment.last_index, with_endpoints)

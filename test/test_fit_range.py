@@ -8,7 +8,7 @@ from fit_line_segment_reference import fit_line_segment
 
 
 def fitter_fit_range(fitter, first, last):
-    return fit_range(fitter._moments, first, last)
+    return fit_range(fitter._moments, first, last, with_endpoints=True)
 
 
 def assert_equivalent_fits(fitter, first, last):
@@ -80,7 +80,7 @@ def test_without_endpoints_same_line_cheaper_params():
     rng = np.random.default_rng(5)
     points = np.cumsum(rng.normal(0.5, 0.4, size=(40, 2)), axis=0)
     fitter = FitterToPointsSequence(points)
-    full = fit_range(fitter._moments, 4, 30)
+    full = fit_range(fitter._moments, 4, 30, with_endpoints=True)
     slim = fit_range(fitter._moments, 4, 30, with_endpoints=False)
 
     np.testing.assert_allclose(slim.direction, full.direction)
