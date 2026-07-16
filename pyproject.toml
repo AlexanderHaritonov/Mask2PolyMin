@@ -6,8 +6,13 @@ build-backend = "setuptools.build_meta"
 name = "mask2polymin"
 version = "0.1.0"
 description = "Fit a polyline with a minimal number of segments to a dense contour, e.g. from bitmask segmentation outputs"
+readme = "README.md"
 requires-python = ">=3.10"
 dependencies = ["numpy"]
+
+[project.optional-dependencies]
+# mask2polymin.plotting imports matplotlib at module level; the core fitter does not need it
+viz = ["matplotlib"]
 
 [tool.setuptools]
 packages = ["mask2polymin"]

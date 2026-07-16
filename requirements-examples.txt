@@ -1,3 +1,2 @@
--e .
+-e .[viz]
 scikit-image
-matplotlib
