@@ -13,14 +13,29 @@ authors = [{name = "Alexander Haritonov"}]
 requires-python = ">=3.10"
 dependencies = ["numpy"]
 keywords = [
+    # Broad
+    "image-processing",
+    "computer-vision",
     "segmentation",
+    "gis",
+    "geospatial",
+
+    # Specific
     "polygon",
     "polyline",
     "contour",
-    "computer-vision",
+    "contour-approximation",
     "line-fitting",
-    "mask",
-    "simplification",
+    "least-squares",
+    "segmentation-mask",
+    "instance-segmentation",
+    "polygon-simplification",
+    "raster-to-vector",
+    "vectorization",
+
+    # Related algorithms this package is an alternative to (not implemented here)
+    "douglas-peucker",
+    "visvalingam-whyatt",
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -28,12 +43,15 @@ classifiers = [
     "Intended Audience :: Science/Research",
     "Topic :: Scientific/Engineering :: Image Processing",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Scientific/Engineering :: GIS",
+    "Topic :: Software Development :: Libraries :: Python Modules",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Typing :: Typed",
 ]
 
