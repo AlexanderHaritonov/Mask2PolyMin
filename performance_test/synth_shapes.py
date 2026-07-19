@@ -33,11 +33,14 @@ RASTER_SHIFT = 8          # fractional bits for fixed-point cv2.fillPoly
 FAMILY_PARAMS = {"rect": {"rect_aspect": 1.8}, "star": {"star_inner_ratio": 0.45}}
 
 # segmentation-noise levels (order of application: elastic jitter -> blur + re-threshold
-# -> boundary speckle); exact numbers are tuned at the noise-review gate
+# -> boundary speckle). Levels 2 and 4 are the noise-review-gate anchors (formerly levels
+# 1 and 2); levels 1 and 3 interpolate between the reviewed settings.
 NOISE_LEVELS = {
-    0: {"blur_sigma": 0.0, "jitter_amp": 0.0, "speckle_p": 0.0},  # clean rasterization
-    1: {"blur_sigma": 1.0, "jitter_amp": 1.0, "speckle_p": 0.0},  # decent segmentation net
-    2: {"blur_sigma": 2.0, "jitter_amp": 2.5, "speckle_p": 0.06},  # sloppy segmentation net
+    0: {"blur_sigma": 0.0, "jitter_amp": 0.0, "speckle_p": 0.0},    # clean rasterization
+    1: {"blur_sigma": 0.5, "jitter_amp": 0.5, "speckle_p": 0.0},    # good segmentation net
+    2: {"blur_sigma": 1.0, "jitter_amp": 1.0, "speckle_p": 0.0},    # decent segmentation net
+    3: {"blur_sigma": 1.5, "jitter_amp": 1.75, "speckle_p": 0.03},  # mediocre segmentation net
+    4: {"blur_sigma": 2.0, "jitter_amp": 2.5, "speckle_p": 0.06},   # sloppy segmentation net
 }
 JITTER_CORR_LEN_PX = 8.0  # Gaussian smoothing sigma of the displacement field: wobble, not salt-and-pepper
 SPECKLE_BAND_PX = 2       # speckle flips are confined to this band around the boundary
@@ -512,7 +515,7 @@ def _record_rng(shape_idx: int, angle_idx: int, level: int, rep: int) -> np.rand
 def dataset(reps: int = 3, gt_dir: Path = GT_DIR):
     """Yield one benchmark record per (shape, angle, noise level, rep) — the single
     enumeration point for run_benchmark.py. Level 0 is deterministic and gets one rep;
-    default volume is 30 x 5 x (1 + 2 x reps) = 1050 records.
+    default volume is 30 x 5 x (1 + 4 x reps) = 1950 records.
 
     Record fields:
       contour_id, family, size_px, angle_deg, noise_level, rep — identity/aggregation axes

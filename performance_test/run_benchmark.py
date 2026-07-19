@@ -1,9 +1,9 @@
 """
 Tier 0 benchmark runner: sweep tolerances x contours x algorithms -> results/raw.csv.
 
-Consumes `synth_shapes.dataset()` (the single enumeration point, 1050 contours) and runs
-both algorithms at each of the 5 tolerance pairs on every contour -> one row per
-(contour, algorithm, tolerance), 10 500 rows. All fidelity metrics are computed against
+Consumes `synth_shapes.dataset()` (the single enumeration point, 1950 contours) and runs
+both algorithms at each of the 4 tolerance pairs on every contour -> one row per
+(contour, algorithm, tolerance), 15 600 rows. All fidelity metrics are computed against
 the GT polygon / GT mask, never the distorted input contour (see Perf_Test_Plan.md).
 Failures are logged to stderr and skipped, not fatal.
 """
@@ -19,8 +19,10 @@ from synth_shapes import dataset
 
 RESULTS_DIR = Path(__file__).parent / "results"
 
-# (rdp_epsilon, m2p_tolerance) pairs: a geometric x2 ladder, tol = epsilon / sqrt(2)
-TOLERANCE_PAIRS = [(0.5, 0.35), (1.0, 0.71), (2.0, 1.41), (4.0, 2.83), (8.0, 5.66)]
+# (rdp_epsilon, m2p_tolerance) pairs: a geometric x2 ladder, tol = epsilon / sqrt(2).
+# The former 8.0/5.66 pair was dropped: the sqrt(2) alignment breaks down at loose RMS
+# tolerances (Mask2PolyMin starts collapsing whole features, sampling a different regime).
+TOLERANCE_PAIRS = [(0.5, 0.35), (1.0, 0.71), (2.0, 1.41), (4.0, 2.83)]
 
 COLUMNS = ["contour_id", "tier", "n_input_points", "algorithm", "tolerance",
            "noise_level", "n_segments", "hausdorff", "hd95", "iou", "rms_sym",

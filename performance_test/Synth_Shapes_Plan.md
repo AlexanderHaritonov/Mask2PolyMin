@@ -43,14 +43,14 @@ implies: for plane, cross-size comparisons mix a geometry change with the scale 
 | size (circumscribed ⌀) | 48, 128, 320 px (car and plane: 64 instead of 48) | 3 |
 | rotation | 0°, 10°, 22.5°, 37°, 45° | 5 |
 | **base GT shapes** | 30 (family, size) cells × 5 angles | **150** |
-| noise level | 0 (clean), 1, 2 | 3 |
+| noise level | 0 (clean), 1–4 | 5 |
 | seeds per noisy level | 3 (level 0 deterministic → 1) | |
-| **distorted contours** | 150 × (1 + 2×3) | **1050** |
+| **distorted contours** | 150 × (1 + 4×3) | **1950** |
 
 0° and 45° are the rasterization special cases (axis-aligned is RDP's best case and must
 be included); 10°/22.5°/37° are generic angles where staircase aliasing is worst.
-Benchmark volume: 1050 contours × 2 algorithms × 5 tolerances = 10 500 rows.
-Per aggregation cell: 150 contours at level 0, 450 at levels 1–2.
+Benchmark volume: 1950 contours × 2 algorithms × 4 tolerances = 15 600 rows.
+Per aggregation cell: 150 contours at level 0, 450 at levels 1–4.
 
 ## Storage — canonical GT files; the pipeline starts by loading them
 
@@ -123,15 +123,20 @@ Order: elastic jitter → blur + re-threshold → speckle. Parameters per level:
 | Level | Blur σ (px) | Jitter amp (px) | Speckle p | Reads as |
 |---|---|---|---|---|
 | 0 | – | – | – | clean rasterization (staircase only) |
-| 1 | 1.0 | 1.0 | – | decent segmentation net |
-| 2 | 2.0 | 2.5 | 0.06 | sloppy segmentation net |
+| 1 | 0.5 | 0.5 | – | good segmentation net |
+| 2 | 1.0 | 1.0 | – | decent segmentation net |
+| 3 | 1.5 | 1.75 | 0.03 | mediocre segmentation net |
+| 4 | 2.0 | 2.5 | 0.06 | sloppy segmentation net |
+
+Levels 2 and 4 are the noise-review-gate anchors (formerly levels 1 and 2); levels 1
+and 3 interpolate between the reviewed settings.
 
 - *Elastic jitter*: smooth random displacement field (Gaussian-smoothed white noise,
   correlation length ~8 px) applied via `cv2.remap` — correlated boundary wobble, not
   salt-and-pepper.
 - *Blur + re-threshold at 0.5* — rounds corners; the effect the benchmark is about.
 - *Speckle*: pixel flips restricted to a ±2 px boundary band, then 3×3 close/open to
-  make the noise blobby; level 2 only.
+  make the noise blobby; levels 3–4 only.
 
 Exact numbers are tuned at the noise-review gate. Contours are extracted from the
 distorted mask with `cv2.findContours` (`RETR_EXTERNAL`, `CHAIN_APPROX_NONE`, largest
@@ -152,16 +157,17 @@ feeds the fitter. Tier 0 keeps cv2 extraction; skimage subpixel contours remain 
    - ~~`distort(mask, level, rng)`, `extract_contour`, and a `dataset(reps=3)`
      generator (loads the canonical JSONs, applies rotations, rasterizes in memory;
      yields one record per (shape, level, rep)) as the single enumeration point for
-     `run_benchmark.py`; render `shape_review/preview_noise.png`.~~ — **done**: 1050
-     records in ~4 s, per-record seeds reproduce contours bit-for-bit in isolation.
-     ✅ **Review gate: noise levels** (closed) — levels 1–2 approved as-is; a further
-     level may be added later, rerunning the pipeline for it.
-   - **Remaining — the Tier 0 run** (details in [Perf_Test_Plan.md](Perf_Test_Plan.md)):
-     `run_benchmark.py` consumes `dataset()`; for each of the 1050 contours it runs
-     both algorithms at the 5 tolerance pairs (ε = 0.5/1/2/4/8, tol = ε/√2) →
-     10 500 rows in gitignored `results/raw.csv`, failures logged and skipped.
-     Sanity-check the headline numbers; aggregation (median/p25/p75/p95 →
-     `summary.csv`) and figures belong to `plot_results.py`, not this step.
+     `run_benchmark.py`; render `shape_review/preview_noise.png`.~~ — **done**:
+     per-record seeds reproduce contours bit-for-bit in isolation.
+     ✅ **Review gate: noise levels** (closed) — the reviewed settings are anchors 2
+     and 4 of the 5-level ladder; levels 1 and 3 interpolate them.
+   - ~~**The Tier 0 run** (details in [Perf_Test_Plan.md](Perf_Test_Plan.md)):
+     `run_benchmark.py` consumes `dataset()`; for each of the 1950 contours it runs
+     both algorithms at the 4 tolerance pairs (ε = 0.5/1/2/4, tol = ε/√2) →
+     15 600 rows in gitignored `results/raw.csv`, failures logged and skipped.~~ —
+     **done** for the earlier 3-level ladder (8 400 rows, 0 failures); rerun at 5
+     levels pending. Aggregation (median/p25/p75/p95 → `summary.csv` + printed
+     median table) and the Tier 0 figures in `plot_results.py`.
 3. ~~Add `performance_test/data/` and `performance_test/results/` to `.gitignore`
-   (`performance_test/gt_shapes/` stays committed).~~ — **done**; mark progress in
-   [Perf_Test_Plan.md](Perf_Test_Plan.md) as the Tier 0 run lands.
+   (`performance_test/gt_shapes/` stays committed).~~ — **done**, progress marked in
+   [Perf_Test_Plan.md](Perf_Test_Plan.md).

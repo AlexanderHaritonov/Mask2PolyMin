@@ -86,8 +86,11 @@ def iou_rasterized(
     """
     h, w = mask.shape
     canvas = np.zeros((h, w), dtype=np.uint8)
-    pts = fitted.reshape(-1, 1, 2).astype(np.int32)
-    cv2.fillPoly(canvas, [pts], 1)
+    # fixed-point subpixel rasterization: a plain int cast truncates toward zero, which
+    # systematically shrinks polygons with float (subpixel) vertices; integer vertices scale losslessly
+    shift = 8
+    pts = np.round(fitted * (1 << shift)).astype(np.int32).reshape(-1, 1, 2)
+    cv2.fillPoly(canvas, [pts], 1, cv2.LINE_8, shift)
 
     inter = np.logical_and(canvas, mask).sum()
     union = np.logical_or(canvas, mask).sum()

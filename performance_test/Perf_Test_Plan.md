@@ -38,9 +38,13 @@ Corner metrics require ground-truth corners → Tier 0 only. IoU alone is not a 
 
 Each algorithm runs on its native tolerance (RDP: L∞, Mask2PolyMin: L2/RMS); metrics are compared post hoc in shared metric space. Starting alignment `ε_rdp ≈ √2 · tolerance`:
 
-| RDP `epsilon` (px) | 0.5 | 1.0 | 2.0 | 4.0 | 8.0 |
-|---|---|---|---|---|---|
-| Mask2PolyMin `tolerance` | 0.35 | 0.71 | 1.41 | 2.83 | 5.66 |
+| RDP `epsilon` (px) | 0.5 | 1.0 | 2.0 | 4.0 |
+|---|---|---|---|---|
+| Mask2PolyMin `tolerance` | 0.35 | 0.71 | 1.41 | 2.83 |
+
+A looser 8.0/5.66 pair was tried and dropped: the √2 alignment breaks down there —
+at RMS tolerance 5.66 Mask2PolyMin starts collapsing whole features, so the pair
+sampled qualitatively different operating points rather than comparable strictness.
 
 ## Datasets
 
@@ -75,11 +79,11 @@ Code in [performance_test/](.). Gitignore `data/` and `results/`.
 ```
 metrics.py               # hausdorff, hd95, rms_distance (sym), rms_directed, iou, corner metrics   [done]
 baselines.py             # rdp_opencv, mask2polymin wrappers + smoke test               [done]
-synth_shapes.py          # Tier 0: GT polygons + mask distortion
+synth_shapes.py          # Tier 0: GT polygons + mask distortion + dataset()           [done]
 fetch_coco.py            # Tier 1: download + cache
 extract_contours.py      # Tier 1: masks → filtered contours (.npz)
-run_benchmark.py         # sweep tolerances × contours × algorithms → raw.csv
-plot_results.py          # figures + summary.csv
+run_benchmark.py         # sweep tolerances × contours × algorithms → raw.csv          [done]
+plot_results.py          # figures + summary.csv                                       [summary done, figures pending]
 ```
 
 One row per (contour, algorithm, tolerance); failures are logged and skipped, not fatal:
@@ -97,7 +101,11 @@ Aggregate median / p25 / p75 / p95 per (tier, algorithm, tolerance, noise_level)
 
 1. ~~`metrics.py` core~~ + `baselines.py` + smoke test — **done**.
 2. ~~Corner metrics in `metrics.py` (`corner_metrics`: recall, precision, localization error)~~ — **done**.
-3. `synth_shapes.py` + Tier 0 run — the headline results.
+3. ~~`synth_shapes.py` + Tier 0 run~~ — **done** for the earlier 3-level noise ladder
+   (8 400 rows, 0 failures); extended to 5 levels → 1950 contours × 2 algorithms ×
+   4 tolerances = 15 600 rows in gitignored `results/raw.csv`, rerun pending;
+   shape/noise review gates in [Synth_Shapes_Plan.md](Synth_Shapes_Plan.md) both closed;
+   aggregation (median/p25/p75/p95 → `summary.csv`) in `plot_results.py`, figures pending.
 4. `fetch_coco.py` + `extract_contours.py` + Tier 1 run.
 5. `plot_results.py`.
 
