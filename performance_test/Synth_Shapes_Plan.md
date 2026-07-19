@@ -12,7 +12,7 @@ their storage, and the distortion pipeline. Review gates are marked ⏸.
 | `hexagon` | 6 | – | obtuse 120° corners — hardest to localize precisely |
 | `star` (5-point) | 10 | 5 | acute ~45° tips — blur erodes them hardest; inner/outer radius ratio 0.45 |
 | `tab` | 8 | 2 | the union-of-two-rectangles shape from [simple_bitmap_example.py](../examples/simple_bitmap_example.py), proportions 50×60 |
-| `plane` | 27 | 11 | airliner pictogram (top view), traced from an icon via the fitter itself: engines, nose arc, tailplane. Detail-rich: min spacing 0.077 unit → smallest legal size for the traced geometry is ⌀ 128; the d64 slot uses a coarsened 25-vertex variant (min spacing 0.145 unit) |
+| `plane` | 18 | 7 | airliner pictogram (top view), traced from an icon via the fitter itself, then simplified by review: engine pods removed, nose collapsed to a single sharp apex. Min spacing 0.099 unit (tailplane chord) → smallest legal size is ⌀ 128; the d64 slot uses a variant with widened tailplane/wingtip chords (min spacing 0.145 unit) |
 | `house` | 9 | 2 | stylized house pictogram: gable roof + door notch in the bottom edge |
 | `ship` | ~11 | yes | stylized ship pictogram: hull with pointed bow + stepped superstructure |
 | `arrow` | 7 | 2 | map direction-arrow (shaft + triangular head): acute tip, two reflex barbs where head meets shaft; strongly orientation-dependent |
@@ -30,10 +30,13 @@ stay coarse (no chimneys, masts, or thin funnels). The generator asserts this fo
 raise that family's small size to 64 px rather than distort the design.
 Outcome of the step-0 review: `car` takes the 64 px fallback; `plane` (traced, detail-rich)
 needs ⌀ 128 as its smallest size; the other 8 families pass at ⌀ 48.
-Step-1 review amendment: plane's small slot is filled at ⌀ 64 by a coarsened 25-vertex
-variant (`SIZE_VARIANTS` in the generator) — engine pods 3 vertices instead of 4, wider
-nose flat and tail/wingtip chords; d128/d320 keep the traced geometry. Caveat this
-implies: for plane, cross-size comparisons mix a geometry change with the scale change.
+Step-1 review amendment: plane's small slot is filled at ⌀ 64 by a variant
+(`SIZE_VARIANTS` in the generator) with widened tailplane and wingtip chords;
+d128/d320 keep the main geometry. Caveat this implies: for plane, cross-size
+comparisons mix a (small) geometry change with the scale change.
+Later review edit to the family itself: engine pods removed (straight wing leading
+edges) and the nose flat collapsed to a single sharp apex — 18 vertices, applied to
+the main geometry and the d64 variant alike.
 
 ## Dataset axes
 
@@ -165,9 +168,9 @@ feeds the fitter. Tier 0 keeps cv2 extraction; skimage subpixel contours remain 
      `run_benchmark.py` consumes `dataset()`; for each of the 1950 contours it runs
      both algorithms at the 4 tolerance pairs (ε = 0.5/1/2/4, tol = ε/√2) →
      15 600 rows in gitignored `results/raw.csv`, failures logged and skipped.~~ —
-     **done** for the earlier 3-level ladder (8 400 rows, 0 failures); rerun at 5
-     levels pending. Aggregation (median/p25/p75/p95 → `summary.csv` + printed
-     median table) and the Tier 0 figures in `plot_results.py`.
-3. ~~Add `performance_test/data/` and `performance_test/results/` to `.gitignore`
-   (`performance_test/gt_shapes/` stays committed).~~ — **done**, progress marked in
-   [Perf_Test_Plan.md](Perf_Test_Plan.md).
+     **done**: 15 600 rows, 0 failures. Aggregation (median/p25/p75/p95 →
+     `summary.csv` + printed median table) and the Tier 0 figures in `plot_results.py`.
+3. ~~Add `performance_test/data/` and `performance_test/results/raw.csv` to
+   `.gitignore` (`performance_test/gt_shapes/` stays committed; `results/summary.csv`
+   and the figures are committed too — see [Perf_Test_Plan.md](Perf_Test_Plan.md)).~~
+   — **done**, progress marked in [Perf_Test_Plan.md](Perf_Test_Plan.md).

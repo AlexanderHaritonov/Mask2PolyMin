@@ -15,6 +15,7 @@ from pathlib import Path
 import matplotlib
 matplotlib.use("Agg")
 from matplotlib import pyplot as plt
+from matplotlib.lines import Line2D
 from matplotlib.ticker import ScalarFormatter
 import numpy as np
 
@@ -39,12 +40,16 @@ PAIR_LABEL = [f"e{e}/t{t}" for e, t in _PAIR_SEQ]
 
 def read_cells(raw_path: Path) -> dict:
     """Group raw.csv rows into (tier, algorithm, tolerance, noise_level) cells;
-    each cell maps metric name -> np.array of values across the cell's contours."""
+    each cell maps metric name -> np.array of values across the cell's contours,
+    plus "family" / "size" arrays (parsed from contour_id) for per-group breakdowns."""
     lists = defaultdict(lambda: defaultdict(list))
     with open(raw_path) as f:
         for row in csv.DictReader(f):
             key = (int(row["tier"]), row["algorithm"], float(row["tolerance"]),
                    int(row["noise_level"]))
+            family, d_size = row["contour_id"].split("_")[:2]
+            lists[key]["family"].append(family)
+            lists[key]["size"].append(int(d_size[1:]))
             for m in METRIC_COLS:
                 lists[key][m].append(float(row[m]))
     return {key: {m: np.array(v) for m, v in metrics.items()}
@@ -175,7 +180,7 @@ def fig_segments_vs_rms(cells, out_path: Path, tier: int = 0) -> None:
 
 def fig_corner_recall(cells, out_path: Path, tier: int = 0, pair_idx: int = 2) -> None:
     """Plan plot 2: corner recall (and precision, same scale) vs noise level at the
-    canonical tolerance pair, medians with p25-p75 band."""
+    canonical tolerance pair — median solid, p95 (best-case ceiling) dashed."""
     levels = sorted({k[3] for k in cells if k[0] == tier})
     fig, axes = plt.subplots(1, 2, figsize=(7.6, 3.6), sharey=True)
     for ax, metric, title in zip(axes, ("corner_recall", "corner_precision"),
@@ -184,24 +189,88 @@ def fig_corner_recall(cells, out_path: Path, tier: int = 0, pair_idx: int = 2) -
             tol = _PAIR_SEQ[pair_idx][0 if algo == "rdp" else 1]
             keys = [(tier, algo, tol, level) for level in levels]
             med = [_percentile(cells[k][metric], 50.0) for k in keys]
-            p25 = [_percentile(cells[k][metric], 25.0) for k in keys]
-            p75 = [_percentile(cells[k][metric], 75.0) for k in keys]
+            p95 = [_percentile(cells[k][metric], 95.0) for k in keys]
             ax.plot(levels, med, "-o", color=COLORS[algo], linewidth=2, markersize=6,
                     label=SERIES_LABEL[algo])
-            ax.fill_between(levels, p25, p75, color=COLORS[algo], alpha=0.12,
-                            linewidth=0)
+            ax.plot(levels, p95, "--", color=COLORS[algo], linewidth=1.6)
         ax.set_xticks(levels)
         ax.set_xticklabels([f"{lv}" + (" (clean)" if lv == 0 else "") for lv in levels])
         ax.set_ylim(0, 1.05)
-        ax.set_title(title + " (median, p25–p75)", fontsize=10, color=INK)
+        ax.set_title(title + " (median solid, p95 dashed)", fontsize=10, color=INK)
         ax.set_xlabel("noise level", fontsize=9, color=INK_2)
         _style(ax)
     eps, tol = _PAIR_SEQ[pair_idx]
     axes[0].set_ylabel("fraction of corners", fontsize=9, color=INK_2)
-    axes[0].legend(frameon=False, fontsize=9, labelcolor=INK, loc="lower left")
+    handles = ([Line2D([], [], color=COLORS[a], linewidth=2, label=SERIES_LABEL[a])
+                for a in ("rdp", "mask2polymin")]
+               + [Line2D([], [], color=INK_2, linewidth=2, label="median"),
+                  Line2D([], [], color=INK_2, linewidth=1.6, linestyle="--", label="p95")])
+    axes[0].legend(handles=handles, frameon=False, fontsize=9, labelcolor=INK,
+                   loc="lower left")
     fig.suptitle(f"corner survival vs noise at ε={eps} / tol={tol} "
                  f"(τ = 2 px)", fontsize=11, color=INK)
     fig.tight_layout(rect=(0, 0, 1, 0.94))
+    fig.savefig(out_path, dpi=150)
+    plt.close(fig)
+    print(f"figure -> {out_path}")
+
+
+_METRIC_LABEL = {"corner_recall": "corner recall", "corner_precision": "corner precision",
+                 "iou": "IoU"}
+
+
+def fig_metric_per_family(cells, out_path: Path, metric: str, size: int | None = None,
+                          tier: int = 0, pair_idx: int = 2) -> None:
+    """Small-multiples breakdown: median corner recall/precision or IoU vs noise level
+    at the canonical tolerance pair, one panel per shape family — pooled over all
+    sizes, or restricted to a single size (48/64/128/320). Splits out what the pooled
+    median hides — which shapes degrade first as noise grows. Corner panels share the
+    full 0-1 axis; IoU panels auto-scale (its dynamic range is a thin band near 1)."""
+    levels = sorted({k[3] for k in cells if k[0] == tier})
+    first = next(k for k in sorted(cells, key=_cell_order) if k[0] == tier)
+    stored = cells[first]["family"] if size is None \
+        else cells[first]["family"][cells[first]["size"] == size]
+    families = sorted(np.unique(stored))
+    nrows = 1 if len(families) <= 5 else 2
+    ncols = (len(families) + nrows - 1) // nrows
+    # width floor keeps the suptitle/caption inside the canvas for few-panel sizes (d064)
+    fig, axes = plt.subplots(nrows, ncols, figsize=(max(2.5 * ncols, 7.4), 2.7 * nrows),
+                             sharex=True, sharey=True, squeeze=False)
+    for ax, family in zip(axes.flat, families):
+        for algo in ("rdp", "mask2polymin"):
+            tol = _PAIR_SEQ[pair_idx][0 if algo == "rdp" else 1]
+            med = []
+            for level in levels:
+                c = cells[(tier, algo, tol, level)]
+                sel = c["family"] == family
+                if size is not None:
+                    sel &= c["size"] == size
+                med.append(_percentile(c[metric][sel], 50.0))
+            ax.plot(levels, med, "-o", color=COLORS[algo], linewidth=1.8,
+                    markersize=4.5, label=SERIES_LABEL[algo])
+        ax.set_xticks(levels)
+        if metric.startswith("corner_"):
+            ax.set_ylim(0, 1.05)
+        ax.set_title(family, fontsize=9.5, color=INK)
+        _style(ax)
+    metric_word = _METRIC_LABEL[metric]
+    for ax in axes[-1]:
+        ax.set_xlabel("noise level", fontsize=9, color=INK_2)
+    for ax in axes[:, 0]:
+        ax.set_ylabel(f"median {metric_word.removeprefix('corner ')}",
+                      fontsize=9, color=INK_2)
+    axes[0][0].legend(frameon=False, fontsize=8.5, labelcolor=INK, loc="lower left")
+    eps, tol = _PAIR_SEQ[pair_idx]
+    where = "" if size is None else f" at d{size:03d}"
+    tau_note = " (τ = 2 px)" if metric.startswith("corner_") else ""
+    fig.suptitle(f"{metric_word} vs noise per shape family{where}, "
+                 f"ε={eps} / tol={tol}{tau_note}", fontsize=11, color=INK)
+    caption = ("median over 3 sizes × 5 angles per point: 15 contours at level 0, "
+               "45 at levels 1–4 (3 reps)" if size is None else
+               "median over 5 angles per point: 5 contours at level 0, "
+               "15 at levels 1–4 (3 reps)")
+    fig.text(0.5, 0.005, caption, ha="center", fontsize=8.5, color=INK_2)
+    fig.tight_layout(rect=(0, 0.02, 1, 0.93 if nrows == 1 else 0.95))
     fig.savefig(out_path, dpi=150)
     plt.close(fig)
     print(f"figure -> {out_path}")
@@ -219,6 +288,20 @@ def main() -> None:
     print(f"\n{len(rows)} cells -> {args.out}")
     fig_segments_vs_rms(cells, args.out.parent / "fig1_segments_vs_rms.png")
     fig_corner_recall(cells, args.out.parent / "fig2_corner_recall.png")
+    out = args.out.parent
+    fig_metric_per_family(cells, out / "fig2b_corner_recall_per_family.png",
+                          "corner_recall")
+    fig_metric_per_family(cells, out / "fig2c_corner_precision_per_family.png",
+                          "corner_precision")
+    fig_metric_per_family(cells, out / "fig2f_iou_per_family.png", "iou")
+    sizes = sorted(np.unique(next(iter(cells.values()))["size"]))
+    for s in sizes:
+        fig_metric_per_family(cells, out / f"fig2d_corner_recall_per_family_d{s:03d}.png",
+                              "corner_recall", size=s)
+        fig_metric_per_family(cells, out / f"fig2e_corner_precision_per_family_d{s:03d}.png",
+                              "corner_precision", size=s)
+        fig_metric_per_family(cells, out / f"fig2g_iou_per_family_d{s:03d}.png",
+                              "iou", size=s)
 
 
 if __name__ == "__main__":

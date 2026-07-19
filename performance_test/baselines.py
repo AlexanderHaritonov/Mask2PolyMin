@@ -27,13 +27,9 @@ def rdp_opencv(contour: np.ndarray, epsilon: float) -> np.ndarray:
 
 
 def mask2polymin(contour: np.ndarray, tolerance: float) -> np.ndarray:
-    """Mask2PolyMin fitter. Returns closed polyline of fitted-line intersections.
+    # Mask2PolyMin fitter. Returns closed polyline of fitted-line intersections.
 
-    max_segments_count is set to len(contour) so the default cap of 30 cannot
-    silently truncate tight-tolerance sweeps; fairness with RDP, which has no
-    such cap, requires this.
-    """
-    config = FitterConfig(tolerance=float(tolerance), max_segments_count=len(contour))
+    config = FitterConfig(tolerance=float(tolerance))
     polygon, _ = FitterToPointsSequence(contour, is_closed=True, config=config).fit()
     return polygon
 

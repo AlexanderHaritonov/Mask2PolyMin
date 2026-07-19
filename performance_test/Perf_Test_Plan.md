@@ -74,7 +74,9 @@ GT polygons in `gtFine/*_polygons.json`; enables comparison with Polygon-RNN++ /
 
 ## Implementation
 
-Code in [performance_test/](.). Gitignore `data/` and `results/`.
+Code in [performance_test/](.). Gitignore `data/` and `results/raw.csv` (a pure,
+regenerable function of committed inputs); commit `results/summary.csv` and the
+figures — they're the claims a reader should be able to see without rerunning.
 
 ```
 metrics.py               # hausdorff, hd95, rms_distance (sym), rms_directed, iou, corner metrics   [done]
@@ -101,9 +103,9 @@ Aggregate median / p25 / p75 / p95 per (tier, algorithm, tolerance, noise_level)
 
 1. ~~`metrics.py` core~~ + `baselines.py` + smoke test — **done**.
 2. ~~Corner metrics in `metrics.py` (`corner_metrics`: recall, precision, localization error)~~ — **done**.
-3. ~~`synth_shapes.py` + Tier 0 run~~ — **done** for the earlier 3-level noise ladder
-   (8 400 rows, 0 failures); extended to 5 levels → 1950 contours × 2 algorithms ×
-   4 tolerances = 15 600 rows in gitignored `results/raw.csv`, rerun pending;
+3. ~~`synth_shapes.py` + Tier 0 run~~ — **done**: 5-level noise ladder, 15 600 rows
+   in gitignored `results/raw.csv` (1950 contours × 2 algorithms × 4 tolerances,
+   0 failures);
    shape/noise review gates in [Synth_Shapes_Plan.md](Synth_Shapes_Plan.md) both closed;
    aggregation (median/p25/p75/p95 → `summary.csv`) in `plot_results.py`, figures pending.
 4. `fetch_coco.py` + `extract_contours.py` + Tier 1 run.

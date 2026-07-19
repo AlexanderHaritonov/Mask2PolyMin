@@ -133,36 +133,29 @@ def _tab() -> np.ndarray:
 def _plane() -> np.ndarray:
     # top-view airliner silhouette, nose up. Traced from an icon (shape_review/plane.jpg):
     # thresholded, contour via cv2.findContours, fitted with Mask2PolyMin at tolerance 1.0,
-    # rotated nose-up, mirror-symmetrized, unit-normalized. Min vertex spacing 0.077 unit
-    # (engine bumps / nose arc), so this family's smallest legal size is d128, not d48.
+    # rotated nose-up, mirror-symmetrized, unit-normalized; then simplified by review
+    # decision: engine pods removed (straight wing leading edges) and the nose flat
+    # collapsed to a single sharp apex. Min vertex spacing ~0.10 unit (tailplane chord),
+    # so this family's smallest legal size is still d128, not d48.
     raw = [
-        (-0.1344, -0.2943),
-        (-0.2605, -0.2258),
-        (-0.3117, -0.3030),
-        (-0.4099, -0.2911),
-        (-0.4246, -0.1323),
-        (-0.9529, 0.1678),
-        (-0.9550, 0.2965),
-        (-0.1302, 0.0754),
-        (-0.0909, 0.6571),
-        (-0.3647, 0.8140),
-        (-0.3669, 0.9135),
-        (0.0000, 0.8162),
+        (-0.1344, -0.2943),  # wing leading root, left
+        (-0.9529, 0.1678),   # wingtip leading
+        (-0.9550, 0.2965),   # wingtip trailing
+        (-0.1302, 0.0754),   # wing trailing root (reflex)
+        (-0.0909, 0.6571),   # aft fuselage, left
+        (-0.3647, 0.8140),   # tailplane leading tip
+        (-0.3669, 0.9135),   # tailplane trailing tip
+        (0.0000, 0.8162),    # tail notch (reflex)
         (0.3669, 0.9135),
         (0.3647, 0.8140),
         (0.0909, 0.6571),
         (0.1302, 0.0754),
         (0.9550, 0.2965),
         (0.9529, 0.1678),
-        (0.4246, -0.1323),
-        (0.4099, -0.2911),
-        (0.3117, -0.3030),
-        (0.2605, -0.2258),
-        (0.1344, -0.2943),
-        (0.1359, -0.7526),
-        (0.0387, -0.9337),
-        (-0.0387, -0.9337),
-        (-0.1359, -0.7526),
+        (0.1344, -0.2943),   # wing leading root, right
+        (0.1359, -0.7526),   # nose shoulder, right
+        (0.0000, -0.9337),   # nose apex — sharp
+        (-0.1359, -0.7526),  # nose shoulder, left
     ]
     return _finalize(raw)
 
@@ -170,13 +163,10 @@ def _plane() -> np.ndarray:
 def _plane64() -> np.ndarray:
     # coarsened variant of _plane for the d64 slot only (step-1 review decision): the traced
     # geometry's fine detail cannot meet the 4.5 px corner floor below d128. Same silhouette,
-    # but engine pods are 3 vertices instead of 4, and the nose flat, tailplane chords and
-    # wingtip chords are widened so every vertex pair is >= 0.145 unit apart (4.64 px at d64).
+    # but the tailplane and wingtip chords are widened so every vertex pair is >= 0.145 unit
+    # apart (4.64 px at d64).
     raw = [
         (-0.134, -0.294),  # wing leading root, left
-        (-0.264, -0.223),  # engine inner (reflex)
-        (-0.365, -0.335),  # engine front
-        (-0.440, -0.160),  # engine outer, leading edge resumes
         (-0.953, 0.155),   # wingtip leading
         (-0.955, 0.305),   # wingtip trailing
         (-0.130, 0.075),   # wing trailing root (reflex)
@@ -190,13 +180,9 @@ def _plane64() -> np.ndarray:
         (0.130, 0.075),
         (0.955, 0.305),
         (0.953, 0.155),
-        (0.440, -0.160),
-        (0.365, -0.335),
-        (0.264, -0.223),
-        (0.134, -0.294),
+        (0.134, -0.294),   # wing leading root, right
         (0.136, -0.753),   # nose shoulder, right
-        (0.075, -0.935),   # nose flat, right
-        (-0.075, -0.935),  # nose flat, left
+        (0.000, -0.935),   # nose apex — sharp
         (-0.136, -0.753),  # nose shoulder, left
     ]
     return _finalize(raw)
@@ -257,34 +243,31 @@ def _arrow() -> np.ndarray:
 
 
 def _car() -> np.ndarray:
-    # rear-view car silhouette: flat roof, obtuse roof shoulders, straight sides,
-    # two wheel bumps protruding below the floor. The wheel-to-body-corner gap is
-    # deliberately small (min spacing ~0.18 unit): this family expects the d64
-    # fallback per the catalog - the bumps must stay small enough to tempt the
-    # fitter to drop them.
+    # low sedan profile facing right (review decision: was a rear-view silhouette with
+    # mirrors). A silhouette cannot express a true 3/4 view, so the profile with a
+    # slanted nose face is the closest realization. Shallow deck/roof bends, obtuse
+    # roofline corners, two wheel bumps protruding below the rocker line — small
+    # sub-features that tempt the fitter to drop them. Min spacing ~0.175 unit
+    # (wheel-arch chords), so this family keeps the d64 fallback slot.
     raw = [
-        (-0.46, -0.50),  # roof, left
-        (0.46, -0.50),   # roof, right
-        (0.62, -0.26),   # roof shoulder, right (obtuse)
-        (0.62, -0.14),   # right mirror root, top (reflex)
-        (0.75, -0.15),   # right mirror tip, top
-        (0.76, -0.03),   # right mirror tip, bottom
-        (0.62, -0.01),   # right mirror root, bottom (reflex)
-        (0.62, 0.55),    # body bottom, right
-        (0.48, 0.55),    # right wheel, outer top (reflex)
-        (0.48, 0.75),    # right wheel, outer bottom
-        (0.22, 0.75),    # right wheel, inner bottom
-        (0.22, 0.55),    # right wheel, inner top (reflex)
-        (-0.22, 0.55),   # left wheel, inner top (reflex)
-        (-0.22, 0.75),   # left wheel, inner bottom
-        (-0.48, 0.75),   # left wheel, outer bottom
-        (-0.48, 0.55),   # left wheel, outer top (reflex)
-        (-0.62, 0.55),   # body bottom, left
-        (-0.62, -0.01),  # left mirror root, bottom (reflex)
-        (-0.76, -0.03),  # left mirror tip, bottom
-        (-0.75, -0.15),  # left mirror tip, top
-        (-0.62, -0.14),  # left mirror root, top (reflex)
-        (-0.62, -0.26),  # roof shoulder, left (obtuse)
+        (-0.88, -0.08),  # trunk deck, rear
+        (-0.52, -0.14),  # rear-window base (shallow bend)
+        (-0.25, -0.42),  # roof, rear
+        (0.15, -0.42),   # roof, front
+        (0.48, -0.10),   # windshield base / hood rear
+        (0.88, -0.04),   # hood front
+        (1.00, 0.20),    # nose, bumper top (slanted front face)
+        (0.95, 0.50),    # front bumper, bottom
+        (0.73, 0.50),    # front wheel arch, front root (reflex)
+        (0.65, 0.66),    # front wheel, front bottom
+        (0.45, 0.66),    # front wheel, rear bottom
+        (0.37, 0.50),    # front wheel arch, rear root (reflex)
+        (-0.37, 0.50),   # rear wheel arch, front root (reflex)
+        (-0.45, 0.66),   # rear wheel, front bottom
+        (-0.65, 0.66),   # rear wheel, rear bottom
+        (-0.73, 0.50),   # rear wheel arch, rear root (reflex)
+        (-0.95, 0.50),   # rear bumper, bottom
+        (-1.00, 0.15),   # rear bumper, top
     ]
     return _finalize(raw)
 
