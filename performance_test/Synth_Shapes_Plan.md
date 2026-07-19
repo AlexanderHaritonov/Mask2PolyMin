@@ -143,19 +143,25 @@ feeds the fitter. Tier 0 keeps cv2 extraction; skimage subpixel contours remain 
    **done**: all 10 families reviewed and accepted; unit-scale constants in
    `synth_shapes.py` (`FAMILIES`), review renders in `shape_review/`.
 
-1. **GT shapes**: unit-scale family definitions, place (scale/rotate/center), rasterize,
-   write the 30 stored pairs and the 4 gallery sheets per the layout above —
-   **implemented**, outputs in `gt_shapes/`; regeneration is byte-identical.
+1. ~~**GT shapes**: unit-scale family definitions, place (scale/rotate/center),
+   rasterize, write the 30 stored pairs and the 4 gallery sheets per the layout
+   above.~~ — **done**: canonical pairs in `gt_shapes/`, galleries in `shape_review/`;
+   regeneration is byte-identical.
    ✅ **Review gate: shapes** (closed) — proportions, star sharpness, pictogram designs approved.
-2. **Distortion + dataset iterator**: `distort(mask, level, rng)`, `extract_contour`,
-   and a `dataset(reps=3)` generator (loads the canonical JSONs, applies rotations,
-   rasterizes in memory; yields one record per (shape, level, rep)) as the single
-   enumeration point for `run_benchmark.py` — **implemented**: 1050 records in ~4 s,
-   per-record seeds reproduce contours bit-for-bit in isolation.
-   Rendered `shape_review/preview_noise.png`: one shape per family × 3 levels (d128,
-   22.5°, true dataset seeds), GT outline + extracted contour overlaid.
-   ⏸ **Review gate: noise levels** (open) — level 2 must read as "bad segmentation
-   net", not "absurd".
-3. Add `performance_test/data/` and `performance_test/results/` to `.gitignore`
-   (`performance_test/gt_shapes/` stays committed); mark step 3 progress in
-   [Perf_Test_Plan.md](Perf_Test_Plan.md).
+2. **Distortion + dataset iterator**:
+   - ~~`distort(mask, level, rng)`, `extract_contour`, and a `dataset(reps=3)`
+     generator (loads the canonical JSONs, applies rotations, rasterizes in memory;
+     yields one record per (shape, level, rep)) as the single enumeration point for
+     `run_benchmark.py`; render `shape_review/preview_noise.png`.~~ — **done**: 1050
+     records in ~4 s, per-record seeds reproduce contours bit-for-bit in isolation.
+     ✅ **Review gate: noise levels** (closed) — levels 1–2 approved as-is; a further
+     level may be added later, rerunning the pipeline for it.
+   - **Remaining — the Tier 0 run** (details in [Perf_Test_Plan.md](Perf_Test_Plan.md)):
+     `run_benchmark.py` consumes `dataset()`; for each of the 1050 contours it runs
+     both algorithms at the 5 tolerance pairs (ε = 0.5/1/2/4/8, tol = ε/√2) →
+     10 500 rows in gitignored `results/raw.csv`, failures logged and skipped.
+     Sanity-check the headline numbers; aggregation (median/p25/p75/p95 →
+     `summary.csv`) and figures belong to `plot_results.py`, not this step.
+3. ~~Add `performance_test/data/` and `performance_test/results/` to `.gitignore`
+   (`performance_test/gt_shapes/` stays committed).~~ — **done**; mark progress in
+   [Perf_Test_Plan.md](Perf_Test_Plan.md) as the Tier 0 run lands.

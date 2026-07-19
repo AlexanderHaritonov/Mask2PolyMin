@@ -38,9 +38,9 @@ Corner metrics require ground-truth corners → Tier 0 only. IoU alone is not a 
 
 Each algorithm runs on its native tolerance (RDP: L∞, Mask2PolyMin: L2/RMS); metrics are compared post hoc in shared metric space. Starting alignment `ε_rdp ≈ √2 · tolerance`:
 
-| RDP `epsilon` (px) | 0.5 | 1.0 | 2.0 | 5.0 | 8.0 |
+| RDP `epsilon` (px) | 0.5 | 1.0 | 2.0 | 4.0 | 8.0 |
 |---|---|---|---|---|---|
-| Mask2PolyMin `tolerance` | 0.35 | 0.71 | 1.41 | 3.54 | 5.66 |
+| Mask2PolyMin `tolerance` | 0.35 | 0.71 | 1.41 | 2.83 | 5.66 |
 
 ## Datasets
 
