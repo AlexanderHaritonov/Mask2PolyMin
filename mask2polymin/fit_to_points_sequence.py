@@ -20,8 +20,10 @@ COLLINEAR_DIRECTIONS_MIN_DOT = 0.98
 
 @dataclass
 class FitterConfig:
-    max_segments_count: int = 30
+    max_segments_count: int = 18
+    
     max_adjust_iterations: int = 20
+
     # Max allowed deviation in pixels (perpendicular distance to the fitted line).
     # tolerance_sq gates everything:
     #   - split eligibility and collinear merge: a segment's mean and max
@@ -48,8 +50,7 @@ class FitterConfig:
 
     @property
     def tolerance_sq(self) -> float:
-        # squared form used internally for L2 comparisons; derived on access so it
-        # can never desync from a later change to tolerance
+        # squared form used internally for L2 comparisons; derived on access so it can never desync from a later change to tolerance
         return self.tolerance ** 2
 
 class FitterToPointsSequence:
