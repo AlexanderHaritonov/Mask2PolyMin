@@ -18,6 +18,9 @@ MIN_POINTS_FOR_DIRECTION = 5
 # cos(~11°): merge candidates whose direction dot product falls below this diverge too much.
 COLLINEAR_DIRECTIONS_MIN_DOT = 0.98
 
+# A point's deviation must clear tolerance by this much (in squared-distance units, so 3x tolerance linear) 
+LOCAL_DEFECT_MARGIN = 9.0
+
 @dataclass
 class FitterConfig:
     max_segments_count: int = 18
@@ -128,11 +131,27 @@ class FitterToPointsSequence:
                 return segmentation_after_split
 
             if new_sse_per_segment > sse_per_segment - self.config.tolerance_sq:
-                if self.config.verbose: print("Breaking up because of no improvement at", len(segments), "segments.")
-                return segments
+                no_severe_local_defect = not self._has_severe_local_defect(segmentation_after_split)
+                if no_severe_local_defect:
+                    if self.config.verbose: print("Breaking up because of no improvement at", len(segments), "segments.")
+                    return segments
+                elif self.config.verbose:
+                    print(f"No global improvement at {len(segmentation_after_split)} segments, but a severe local defect remains; continuing.")
 
             segments = segmentation_after_split
             sse_per_segment = new_sse_per_segment
+
+    def _has_severe_local_defect(self, segments: list[SequenceSegment]) -> bool:
+        """Whether any segment has a point deviating enough to be a real unresolved feature
+        rather than pixel-quantization jitter (see LOCAL_DEFECT_MARGIN)."""
+        threshold = LOCAL_DEFECT_MARGIN * self.config.tolerance_sq
+        for segment in segments:
+            if segment.points_count() <= 3:
+                continue
+            points = subsequence(self.whole_sequence, segment.first_index, segment.last_index)
+            if segment.line_segment_params.squared_distances_to_line(points).max() > threshold:
+                return True
+        return False
 
     def _merge_collinear_segments(self, segments: list[SequenceSegment]) -> list[SequenceSegment]:
         # single-pass index walk,
