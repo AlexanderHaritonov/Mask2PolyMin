@@ -260,10 +260,14 @@ class FitterToPointsSequence:
             junction_last_scored_state[junction_index] = state
             new_last, new_first, boundary_shift = self.best_consecutive_segments_separation(previous_segment, next_segment)
             if boundary_shift > 0:
+                prev_changed = new_last != previous_segment.last_index
+                next_changed = new_first != next_segment.first_index
                 previous_segment.last_index = new_last
                 next_segment.first_index = new_first
-                refit_segment(self._moments, previous_segment, with_endpoints=False)
-                refit_segment(self._moments, next_segment, with_endpoints=False)
+                if prev_changed:
+                    refit_segment(self._moments, previous_segment, with_endpoints=False)
+                if next_changed:
+                    refit_segment(self._moments, next_segment, with_endpoints=False)
 
             return boundary_shift
 
