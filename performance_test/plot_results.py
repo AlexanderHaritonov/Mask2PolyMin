@@ -322,9 +322,10 @@ def main() -> None:
     write_summary(runtime_rows, args.out.parent / "runtime_summary.csv")
     print_runtime_summary(runtime_rows)
     print(f"\n{len(runtime_rows)} rows -> {args.out.parent / 'runtime_summary.csv'}")
-    fig_segments_vs_rms(cells, args.out.parent / "fig1_segments_vs_rms.png")
-    fig_corner_recall(cells, args.out.parent / "fig2_corner_recall.png")
-    out = args.out.parent
+    out = args.out.parent / "charts"
+    out.mkdir(parents=True, exist_ok=True)
+    fig_segments_vs_rms(cells, out / "fig1_segments_vs_rms.png")
+    fig_corner_recall(cells, out / "fig2_corner_recall.png")
     fig_metric_per_family(cells, out / "fig2b_corner_recall_per_family.png",
                           "corner_recall")
     fig_metric_per_family(cells, out / "fig2c_corner_precision_per_family.png",

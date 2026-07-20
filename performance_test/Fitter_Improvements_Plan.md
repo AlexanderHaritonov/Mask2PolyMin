@@ -16,7 +16,7 @@ none of these three are implemented yet.
 3. **`max_deviation` split-ranking flag** is independent of the other two and can happen any time —
    it changes which segment gets picked *among several already-eligible ones*, not whether a defect
    is flagged or how a finished segmentation's corners get reconstructed.
-
+4. Promote the created params to config vals
 ---
 
 ## 1. `_corner()`'s plausibility check should be angle-aware, not just distance-aware

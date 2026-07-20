@@ -31,5 +31,5 @@ python plot_results.py
 ```
 
 Produces `results/summary.csv` (median/p25/p75/p95 per algorithm × tolerance × noise
-level), prints the median table, and renders `results/fig1_segments_vs_rms.png` and
-`results/fig2_corner_recall.png`.
+level), prints the median table, and renders `results/charts/fig1_segments_vs_rms.png` and
+`results/charts/fig2_corner_recall.png` (plus the per-family figures).
