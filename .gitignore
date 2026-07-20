@@ -72,3 +72,4 @@ coverage.xml
 # benchmark artifacts: regenerable caches and results (gt_shapes/ stays committed)
 performance_test/data/
 performance_test/results/raw.csv
+performance_test/results/corner_angle_observations.csv

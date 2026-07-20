@@ -3,12 +3,14 @@
 Three outstanding items that came out of the Option A/B/margin work on
 [fit_to_points_sequence.py](../mask2polymin/fit_to_points_sequence.py)'s termination logic and the
 subsequent per-family benchmark investigation. Unlike A/B/margin (already landed and committed),
-none of these three are implemented yet.
+these three were not implemented yet; going through them one at a time, item 1 is now done (see
+its Resolved note below).
 
 ## Suggested order
 
 1. **`_corner()` angle-awareness** first — fully isolated (lives in `polyline.py`, downstream of
    all splitting/termination logic), so it can't be affected by or interfere with the other two.
+   **Done.**
 2. **Re-tune `LOCAL_DEFECT_MARGIN`** after (1) lands — car's recall shortfall is *partly* explained
    by the margin (see evidence below), but not necessarily *entirely*; the corner-reconstruction fix
    may itself move car's numbers and change what "optimal" means. Re-run the car investigation after
@@ -67,6 +69,28 @@ benchmark re-run afterward, not just the plane/car slice — check for regressio
 currently recall well. Also worth a dedicated unit test with a synthetic shallow-angle junction
 (mirroring how `test_split_segment_clamps_pivot_near_segment_start/_end` were added for the B pivot
 clamp), so the behavior is locked in independent of the full benchmark noise floor.
+
+**Resolved.** Added `MIN_CORNER_ANGLE_DEG = 20.0` to `polyline.py`: below this convergence angle,
+`_corner()` falls back to the anchor regardless of how close the intersection lands (the distance
+check is untouched, now a second independent condition). The threshold came from a full-dataset
+hit/miss sweep, not a guess — see `performance_test/analyze_corner_angles.py` (cached to
+`results/corner_angle_observations.csv`), which computes the actual convergence angle at every
+corner junction across all 1950 Tier 0 contours × 4 tolerances and simulates flipping
+intersection → anchor at candidate thresholds. Net corner-recall hits turn positive above ~15°,
+peak around 18-20°, and go sharply negative above ~30° (too aggressive).
+
+The per-family breakdown was the key finding: **the gain is almost entirely one family.** At 20°,
+plane nets +206 hit junctions; every other family is flat to slightly negative (car -10, hexagon
+-13, star -13, house -10, out of ~7-11k intersection junctions each) — matching the framing above:
+this item was always diagnosed as a plane problem, car's is the margin below. A full benchmark
+re-run (isolated via `git stash` on just `polyline.py`, since the previously-committed baseline
+turned out to be stale relative to the current `fit_to_points_sequence.py` for unrelated reasons)
+confirmed it end-to-end: pooled across noise levels, plane's median corner recall at tol=1.41 moved
+0.333 → 0.389 (precision 0.412 → 0.444); every other family's median recall/precision is
+byte-identical, means move by under 0.1pp. Segment/corner counts are unaffected in every cell, as
+expected — `_corner()` only places a vertex for an already-finalized segment list, it can't change
+how many there are (confirmed empirically, not just by inspection: the same 100-contour sample
+with vs. without the change produced byte-identical segment counts in all 400 rows).
 
 ---
 

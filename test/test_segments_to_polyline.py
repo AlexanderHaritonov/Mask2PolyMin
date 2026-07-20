@@ -73,6 +73,43 @@ def test_implausibly_far_intersection_falls_back_to_anchor():
     np.testing.assert_allclose(poly[1], [3.5, 0.25], atol=1e-9)
 
 
+def test_shallow_angle_intersection_falls_back_to_anchor():
+    # Two lines converging at 10 deg -- well under MIN_CORNER_ANGLE_DEG (20 deg) -- whose
+    # intersection lands only 2px from the anchor, comfortably within max_offset. This
+    # isolates the angle gate specifically: test_implausibly_far_intersection_falls_back_to_anchor
+    # above isolates the pre-existing distance gate, which this case would pass.
+    d = np.array([np.cos(np.deg2rad(10.0)), np.sin(np.deg2rad(10.0))])
+    corner = np.array([10.0, 0.0])        # true two-line intersection
+    anchor_point = np.array([10.0, 2.0])  # orphaned point: 2px off, well within max_offset
+    points = np.vstack([
+        [0, 0], [3, 0], [6, 0], corner,
+        anchor_point,
+        corner + 3 * d, corner + 6 * d, corner + 10 * d,
+    ])
+    seg1 = SequenceSegment(points, 0, 3, make_params([0, 0], corner))
+    seg2 = SequenceSegment(points, 5, 7, make_params(corner, corner + 10 * d))
+    poly = segments_to_polyline([seg1, seg2], is_closed=False, tolerance=1.0)
+    np.testing.assert_allclose(poly[1], anchor_point, atol=1e-9)
+
+
+def test_moderate_angle_intersection_is_still_used():
+    # Same construction at 40 deg -- comfortably above MIN_CORNER_ANGLE_DEG -- confirms the
+    # angle gate doesn't overreach: once the lines diverge enough, the intersection is
+    # trusted even though it's the same 2px away from the anchor as the case above.
+    d = np.array([np.cos(np.deg2rad(40.0)), np.sin(np.deg2rad(40.0))])
+    corner = np.array([10.0, 0.0])
+    anchor_point = np.array([10.0, 2.0])
+    points = np.vstack([
+        [0, 0], [3, 0], [6, 0], corner,
+        anchor_point,
+        corner + 3 * d, corner + 6 * d, corner + 10 * d,
+    ])
+    seg1 = SequenceSegment(points, 0, 3, make_params([0, 0], corner))
+    seg2 = SequenceSegment(points, 5, 7, make_params(corner, corner + 10 * d))
+    poly = segments_to_polyline([seg1, seg2], is_closed=False, tolerance=1.0)
+    np.testing.assert_allclose(poly[1], corner, atol=1e-9)
+
+
 def test_orphan_mean_anchors_the_junction():
     # a gap between the segments: the anchor is the orphaned points' mean,
     # and with parallel lines it becomes the vertex itself
