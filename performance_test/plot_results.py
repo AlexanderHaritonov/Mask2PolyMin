@@ -276,6 +276,38 @@ def fig_metric_per_family(cells, out_path: Path, metric: str, size: int | None =
     print(f"figure -> {out_path}")
 
 
+def runtime_summary(cells: dict) -> list[dict]:
+    """Average and P95 wall_time_ms per algorithm, globally and per image size class
+    (pooled across tier/tolerance/noise_level -- this is wall-clock cost, not fidelity,
+    so it doesn't need the tolerance/noise breakdown the fidelity metrics get)."""
+    pooled = defaultdict(lambda: {"wall_time_ms": [], "size": []})
+    for (_tier, algorithm, _tolerance, _noise_level), metrics in cells.items():
+        pooled[algorithm]["wall_time_ms"].append(metrics["wall_time_ms"])
+        pooled[algorithm]["size"].append(metrics["size"])
+    pooled = {algo: {k: np.concatenate(v) for k, v in d.items()}
+              for algo, d in pooled.items()}
+
+    rows = []
+    for algo in sorted(pooled):
+        wt, sizes = pooled[algo]["wall_time_ms"], pooled[algo]["size"]
+        rows.append({"algorithm": algo, "size": "all", "n_rows": len(wt),
+                     "wall_time_ms_avg": round(float(np.mean(wt)), 4),
+                     "wall_time_ms_p95": round(float(np.percentile(wt, 95.0)), 4)})
+        for s in sorted(np.unique(sizes)):
+            sel = sizes == s
+            rows.append({"algorithm": algo, "size": int(s), "n_rows": int(sel.sum()),
+                         "wall_time_ms_avg": round(float(np.mean(wt[sel])), 4),
+                         "wall_time_ms_p95": round(float(np.percentile(wt[sel], 95.0)), 4)})
+    return rows
+
+
+def print_runtime_summary(rows: list[dict]) -> None:
+    print(f"\n{'algorithm':<14}{'size':>6}{'n':>7}{'avg_ms':>10}{'p95_ms':>10}")
+    for row in rows:
+        print(f"{row['algorithm']:<14}{str(row['size']):>6}{row['n_rows']:>7}"
+              f"{row['wall_time_ms_avg']:>10.3f}{row['wall_time_ms_p95']:>10.3f}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Aggregate raw.csv -> summary.csv + figures")
     parser.add_argument("--raw", type=Path, default=RESULTS_DIR / "raw.csv")
@@ -286,6 +318,10 @@ def main() -> None:
     write_summary(rows, args.out)
     print_medians(cells)
     print(f"\n{len(rows)} cells -> {args.out}")
+    runtime_rows = runtime_summary(cells)
+    write_summary(runtime_rows, args.out.parent / "runtime_summary.csv")
+    print_runtime_summary(runtime_rows)
+    print(f"\n{len(runtime_rows)} rows -> {args.out.parent / 'runtime_summary.csv'}")
     fig_segments_vs_rms(cells, args.out.parent / "fig1_segments_vs_rms.png")
     fig_corner_recall(cells, args.out.parent / "fig2_corner_recall.png")
     out = args.out.parent
