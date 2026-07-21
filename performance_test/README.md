@@ -7,22 +7,24 @@ segmentation noise. Design and rationale: [Perf_Test_Plan.md](Perf_Test_Plan.md)
 ## Choosing tolerance for a given noise level
 
 `NOISE_LEVELS` in [synth_shapes.py](synth_shapes.py) defines each level's `jitter_amp` — the
-per-pixel standard deviation of the elastic boundary displacement used to simulate segmentation noise. Mask2PolyMin's `tolerance` should track that noise:
+per-pixel standard deviation of the elastic boundary displacement used to simulate segmentation
+noise. `run_benchmark.matched_pair()` derives that level's `(rdp_epsilon, mask2polymin_tolerance)`
+from it:
 
 ```
-tolerance ≈ max(1.0, jitter_amp)
+tolerance = max(1.0, jitter_amp)      # the 1.0 floor covers pixel-quantization jitter present even in a clean mask
+epsilon   = tolerance · √2
 ```
 
-| noise level | jitter_amp (px) | recommended tolerance |
-|---|---|---|
-| 0 (clean) | 0.0 | 1.0 |
-| 1 (good segmentation net) | 0.5 | 1.0 |
-| 2 (decent) | 1.0 | 1.0 |
-| 3 (mediocre) | 1.75 | 1.75 |
-| 4 (sloppy) | 2.5 | 2.5 |
+| noise level | jitter_amp (px) | tolerance | epsilon |
+|---|---|---|---|
+| 0 (clean) | 0.0 | 1.0 | 1.41 |
+| 1 (good segmentation net) | 0.5 | 1.0 | 1.41 |
+| 2 (decent) | 1.0 | 1.0 | 1.41 |
+| 3 (mediocre) | 1.75 | 1.75 | 2.47 |
+| 4 (sloppy) | 2.5 | 2.5 | 3.54 |
 
-This keeps the fitter from hitting `max_segments_count` pinned-at-cap distortion) at high noise,
-at the cost of being somewhat loose rather than tight-optimal
+The benchmark runs each contour once, at its own noise level's matched pair.
 
 ## 1. GT shapes — committed, regenerate only after a design change
 
@@ -41,8 +43,9 @@ and existing results are stale. Optional reviews: `--preview` (per-family render
 python run_benchmark.py            # ~10 min; --limit N for a quick smoke pass
 ```
 
-Produces `results/raw.csv` (gitignored): 15 600 rows = 1950 contours × 2 algorithms ×
-4 tolerance pairs, one row per run. Deterministic except `wall_time_ms`.
+Produces `results/raw.csv` (gitignored): 3900 rows = 1950 contours × 2 algorithms, one row
+per run, each at its noise level's matched tolerance (see above). Deterministic except
+`wall_time_ms`.
 
 ## 3. Aggregate + figures
 
@@ -50,6 +53,6 @@ Produces `results/raw.csv` (gitignored): 15 600 rows = 1950 contours × 2 algori
 python plot_results.py
 ```
 
-Produces `results/summary.csv` (median/p25/p75/p95 per algorithm × tolerance × noise
-level), prints the median table, and renders `results/charts/fig1_segments_vs_rms.png` and
+Produces `results/summary.csv` (median/p25/p75/p95 per algorithm × noise level), prints the
+median table, and renders `results/charts/fig1_segments_vs_rms.png` and
 `results/charts/fig2_corner_recall.png` (plus the per-family figures).

@@ -36,15 +36,22 @@ Corner metrics require ground-truth corners → Tier 0 only. IoU alone is not a 
 
 ## Tolerance alignment
 
-Each algorithm runs on its native tolerance (RDP: L∞, Mask2PolyMin: L2/RMS); metrics are compared post hoc in shared metric space. Starting alignment `ε_rdp ≈ √2 · tolerance`:
+Each algorithm runs on its native tolerance (RDP: L∞, Mask2PolyMin: L2/RMS); metrics are compared post hoc in shared metric space. Alignment: `ε_rdp = √2 · tolerance`.
 
-| RDP `epsilon` (px) | 0.5 | 1.0 | 2.0 | 4.0 |
-|---|---|---|---|---|
-| Mask2PolyMin `tolerance` | 0.35 | 0.71 | 1.41 | 2.83 |
+Rather than sweeping a fixed ladder of tolerances at every noise level, each contour runs at the single `(epsilon, tolerance)` pair matched to *its own* noise level — `run_benchmark.matched_pair(noise_level)`, mirroring how a caller actually picks tolerance for the noise they expect:
 
-A looser 8.0/5.66 pair was tried and dropped: the √2 alignment breaks down there —
-at RMS tolerance 5.66 Mask2PolyMin starts collapsing whole features, so the pair
-sampled qualitatively different operating points rather than comparable strictness.
+```
+tolerance = max(1.0, jitter_amp)      # the 1.0 floor covers pixel-quantization jitter present even in a clean mask
+epsilon   = tolerance · √2
+```
+
+| noise level | `jitter_amp` (px) | Mask2PolyMin `tolerance` | RDP `epsilon` |
+|---|---|---|---|
+| 0 (clean) | 0.0 | 1.0 | 1.41 |
+| 1 (good segmentation net) | 0.5 | 1.0 | 1.41 |
+| 2 (decent) | 1.0 | 1.0 | 1.41 |
+| 3 (mediocre) | 1.75 | 1.75 | 2.47 |
+| 4 (sloppy) | 2.5 | 2.5 | 3.54 |
 
 ## Datasets
 
@@ -84,28 +91,29 @@ baselines.py             # rdp_opencv, mask2polymin wrappers + smoke test       
 synth_shapes.py          # Tier 0: GT polygons + mask distortion + dataset()           [done]
 fetch_coco.py            # Tier 1: download + cache
 extract_contours.py      # Tier 1: masks → filtered contours (.npz)
-run_benchmark.py         # sweep tolerances × contours × algorithms → raw.csv          [done]
+run_benchmark.py         # contours × algorithms, one noise-matched tolerance/level → raw.csv  [done]
 plot_results.py          # figures + summary.csv                                       [summary done, figures pending]
 ```
 
-One row per (contour, algorithm, tolerance); failures are logged and skipped, not fatal:
+One row per (contour, algorithm); failures are logged and skipped, not fatal:
 
 ```
 contour_id, tier, n_input_points, algorithm, tolerance, noise_level,
 n_segments, hausdorff, hd95, iou, rms_sym, rms_dir, corner_recall, corner_precision, corner_loc_err, wall_time_ms
 ```
 
+`tolerance` holds each row's noise-matched value (epsilon for `rdp`, tolerance for `mask2polymin`) — a derived record of what ran, not an independent sweep axis.
 `rms_dir` is reference → fit (the direction RDP's ε bounds); `rms_sym` ≫ `rms_dir` flags a fit that invented geometry the reference lacks (e.g. overshot corners).
 
-Aggregate median / p25 / p75 / p95 per (tier, algorithm, tolerance, noise_level) → `summary.csv`.
+Aggregate median / p25 / p75 / p95 per (tier, algorithm, noise_level) → `summary.csv`.
 
 ## Build order
 
 1. ~~`metrics.py` core~~ + `baselines.py` + smoke test — **done**.
 2. ~~Corner metrics in `metrics.py` (`corner_metrics`: recall, precision, localization error)~~ — **done**.
-3. ~~`synth_shapes.py` + Tier 0 run~~ — **done**: 5-level noise ladder, 15 600 rows
-   in gitignored `results/raw.csv` (1950 contours × 2 algorithms × 4 tolerances,
-   0 failures);
+3. ~~`synth_shapes.py` + Tier 0 run~~ — **done**: 5-level noise ladder, one noise-matched
+   tolerance per level, 3900 rows in gitignored `results/raw.csv` (1950 contours ×
+   2 algorithms, 0 failures);
    shape/noise review gates in [Synth_Shapes_Plan.md](Synth_Shapes_Plan.md) both closed;
    aggregation (median/p25/p75/p95 → `summary.csv`) in `plot_results.py`, figures pending.
 4. `fetch_coco.py` + `extract_contours.py` + Tier 1 run.
@@ -113,12 +121,12 @@ Aggregate median / p25 / p75 / p95 per (tier, algorithm, tolerance, noise_level)
 
 ## Plots
 
-1. **Segments vs. symmetric RMS (to GT)** — Tier 0, per noise level. Lower-left is better.
-2. **Corner recall vs. noise level** — Tier 0, fixed tolerance. Headline corner figure.
+1. **Segments vs. symmetric RMS (to GT)** — Tier 0, one point per noise level at its noise-matched tolerance, connected 0→4 per algorithm. Lower-left is better.
+2. **Corner recall vs. noise level** — Tier 0, each level at its own noise-matched tolerance (not a fixed tolerance held constant across levels). Headline corner figure.
 3. **Segments vs. IoU** — Tier 1. Mark each algorithm's IoU noise floor (tightest tolerance); differences within the floor band are not wins.
 4. **Wall time vs. contour length** — Tier 1, single tolerance.
 
-Plus a table at the canonical tolerance (ε = 2.0 / tol = 1.41): median #segs, IoU, Hausdorff, HD95, corner recall, ms/contour.
+Plus a table with one row per noise level, each at its noise-matched tolerance: median #segs, IoU, Hausdorff, HD95, corner recall, ms/contour.
 
 ## Report
 

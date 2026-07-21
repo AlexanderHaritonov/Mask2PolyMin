@@ -1,28 +1,39 @@
 """
-Tier 0 benchmark runner: sweep tolerances x contours x algorithms -> results/raw.csv.
+Tier 0 benchmark runner: contours x algorithms, one noise-matched tolerance per noise
+level -> results/raw.csv.
 
 Consumes `synth_shapes.dataset()` (the single enumeration point, 1950 contours) and runs
-both algorithms at each of the 4 tolerance pairs on every contour -> one row per
-(contour, algorithm, tolerance), 15 600 rows. All fidelity metrics are computed against
-the GT polygon / GT mask, never the distorted input contour (see Perf_Test_Plan.md).
-Failures are logged to stderr and skipped, not fatal.
+both algorithms once per contour, at the (eps, tol) pair matched to that contour's own
+noise level (see `matched_pair`) -> one row per (contour, algorithm), 3900 rows. This
+mirrors how the library is actually used: a caller picks tolerance for the noise level
+they expect, not a fixed value regardless of it. All fidelity metrics are computed
+against the GT polygon / GT mask, never the distorted input contour (see
+Perf_Test_Plan.md). Failures are logged to stderr and skipped, not fatal.
 """
 import argparse
 import csv
+import math
 import sys
 import time
 from pathlib import Path
 
 from baselines import mask2polymin, rdp_opencv
 from metrics import corner_metrics, hausdorff, hd95, iou_rasterized, rms_directed, rms_distance
-from synth_shapes import dataset
+from synth_shapes import NOISE_LEVELS, dataset
 
 RESULTS_DIR = Path(__file__).parent / "results"
 
-# (rdp_epsilon, m2p_tolerance) pairs: a geometric x2 ladder, tol = epsilon / sqrt(2).
-# The former 8.0/5.66 pair was dropped: the sqrt(2) alignment breaks down at loose RMS
-# tolerances (Mask2PolyMin starts collapsing whole features, sampling a different regime).
-TOLERANCE_PAIRS = [(0.5, 0.35), (1.0, 0.71), (2.0, 1.41), (4.0, 2.83)]
+
+def matched_pair(noise_level: int) -> tuple[float, float]:
+    """(rdp_epsilon, m2p_tolerance) matched to a noise level's boundary jitter amplitude
+    (README `Parameters`): tolerance = max(1.0, jitter_amp) -- the 1.0 floor covers
+    pixel-quantization jitter present even in a clean mask -- and epsilon = tolerance *
+    sqrt(2), the starting alignment between RDP's L-infinity bound and Mask2PolyMin's
+    RMS bound."""
+    jitter_amp = NOISE_LEVELS[noise_level]["jitter_amp"]
+    tol = max(1.0, jitter_amp)
+    return tol * math.sqrt(2), tol
+
 
 COLUMNS = ["contour_id", "tier", "n_input_points", "algorithm", "tolerance",
            "noise_level", "n_segments", "hausdorff", "hd95", "iou", "rms_sym",
@@ -75,16 +86,16 @@ def main() -> None:
             if args.limit is not None and i >= args.limit:
                 break
             n_contours = i + 1
-            for eps, tol in TOLERANCE_PAIRS:
-                for name, fit_fn, t in [("rdp", rdp_opencv, eps),
-                                        ("mask2polymin", mask2polymin, tol)]:
-                    try:
-                        writer.writerow(measure(record, name, fit_fn, t))
-                        n_rows += 1
-                    except Exception as exc:
-                        n_fail += 1
-                        print(f"FAIL {record['contour_id']} {name} tol={t}: {exc}",
-                              file=sys.stderr)
+            eps, tol = matched_pair(record["noise_level"])
+            for name, fit_fn, t in [("rdp", rdp_opencv, eps),
+                                    ("mask2polymin", mask2polymin, tol)]:
+                try:
+                    writer.writerow(measure(record, name, fit_fn, t))
+                    n_rows += 1
+                except Exception as exc:
+                    n_fail += 1
+                    print(f"FAIL {record['contour_id']} {name} tol={t}: {exc}",
+                          file=sys.stderr)
             if n_contours % 105 == 0:
                 print(f"  {n_contours} contours, {n_rows} rows, "
                       f"{time.perf_counter() - t_start:.0f} s", flush=True)
