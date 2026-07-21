@@ -21,39 +21,38 @@ COLLINEAR_DIRECTIONS_MIN_DOT = 0.98
 # A point's deviation must clear tolerance by this much (in squared-distance units).
 LOCAL_DEFECT_MARGIN = 4.5
 
+# Cap on adjust_segmentation's boundary-refinement passes per split.
+MAX_ADJUST_ITERATIONS = 20
+
+# Max points per junction that may be left orphaned (assigned to no segment);
+# orphaning is data-driven: a point is orphaned iff farther than tolerance from both adjacent lines.
+MAX_ORPHANS_PER_JUNCTION = 2
+
 @dataclass
 class FitterConfig:
     max_segments_count: int = 18
-    
-    max_adjust_iterations: int = 20
 
     # Max allowed deviation in pixels (perpendicular distance to the fitted line).
     # tolerance_sq gates everything:
-    #   - split eligibility and collinear merge: a segment's mean and max
-    #     squared point distance must stay within it;
-    #   - global stop: the average SSE per segment must stay within it,
-    #     i.e. each segment gets a budget of ~one tolerance-sized outlier;
-    #   - improvement: each split must reduce that SSE by at least one
-    #     outlier's worth, else the fitter gives up.
+    #   - split eligibility and collinear merge: a segment's mean and max squared point distance must stay within it;
+    #   - global stop: the average SSE per segment must stay within it, i.e. each segment gets a budget of ~one tolerance-sized outlier;
+    #   - improvement: each split must reduce that SSE by at least one  outlier's worth, else the fitter gives up.
+    # Rule of thumb: tolerance ≈ max(1.0, jitter_amp), where `jitter_amp` how noisy the segmentation is 
+    # - the standard deviation of how far the mask's boundary randomly wanders from its true edge.
+    # The 1.0 floor covers ordinary pixel-quantization jitter present even in a "clean" mask.
     tolerance: float = 1.0
-    # Max points per junction that may be left orphaned (assigned to no segment);
-    # orphaning is data-driven: a point is orphaned iff farther than tolerance from both adjacent lines.
-    max_orphans_per_junction: int = 2
-    verbose: bool = False
 
     # When several segments are simultaneously eligible for the next split, rank by each segment's single worst point instead of its mean loss.
     # Slightly improves simple shapes reconstruction, but can damage complex shapes.
     rank_split_by_max_deviation: bool = False
 
+    verbose: bool = False
+
     def __post_init__(self):
         if self.max_segments_count < 1:
             raise ValueError(f"max_segments_count must be >= 1, got {self.max_segments_count}")
-        if self.max_adjust_iterations < 1:
-            raise ValueError(f"max_adjust_iterations must be >= 1, got {self.max_adjust_iterations}")
         if self.tolerance <= 0:
             raise ValueError(f"tolerance must be > 0, got {self.tolerance}")
-        if self.max_orphans_per_junction < 0:
-            raise ValueError(f"max_orphans_per_junction must be >= 0, got {self.max_orphans_per_junction}")
 
     @property
     def tolerance_sq(self) -> float:
@@ -311,7 +310,7 @@ class FitterToPointsSequence:
 
             return boundary_shift
 
-        for iterations_count in range(self.config.max_adjust_iterations):
+        for iterations_count in range(MAX_ADJUST_ITERATIONS):
             # The start segment is typically the 1st segment of the pair resulting from the split.
             # Then we do iterations of following (at most MAX_ITERATIONS)
             # we go in the direction of increasing index and for each segment:
@@ -358,20 +357,20 @@ class FitterToPointsSequence:
                 return sse_per_segment
 
         if self.config.verbose:
-            print(f"at {len(segments)} segments, adjust_segmentation reached {self.config.max_adjust_iterations} iterations.")
+            print(f"at {len(segments)} segments, adjust_segmentation reached {MAX_ADJUST_ITERATIONS} iterations.")
         return sse_per_segment
 
 
     def best_consecutive_segments_separation(self, segment1: SequenceSegment, segment2: SequenceSegment) -> tuple[int, int, int]:
         """:returns (last index of segment1, first index of segment2, boundary shift),
-        between the two indices 0..config.max_orphans_per_junction points may be left orphaned;
+        between the two indices 0..MAX_ORPHANS_PER_JUNCTION points may be left orphaned;
         the shift is how many positions the junction moved (max over its two ends).
         The contested window (that is range of points that can change segment they belong to) is scored against each segment's uncontested core-half line,
         so a junction outlier cannot vouch for itself through its own segment's fit.
         Orphaning a point costs tolerance_sq, so a point is orphaned iff it lies farther than tolerance from both core lines."""
 
         n = len(self.whole_sequence)
-        assert (segment2.first_index - segment1.last_index - 1) % n <= self.config.max_orphans_per_junction
+        assert (segment2.first_index - segment1.last_index - 1) % n <= MAX_ORPHANS_PER_JUNCTION
         left_limit = self._lower_mid_index(segment1.first_index, segment1.last_index)
         right_limit = self._lower_mid_index(segment2.first_index, segment2.last_index)
         relevant_points = subsequence(self.whole_sequence, left_limit, right_limit)
@@ -389,9 +388,9 @@ class FitterToPointsSequence:
         if both_fits_within_tolerance:
             # Score against the uncontested core halves: a junction outlier cannot vouch for itself through the fit it has dragged.
             # The core's outer end may itself hold an undetected outlier of the neighboring junction, so trim up to max_orphans_per_junction points there.
-            trim1 = max(0, min(self.config.max_orphans_per_junction,
+            trim1 = max(0, min(MAX_ORPHANS_PER_JUNCTION,
                                points_count(n, segment1.first_index, left_limit) - MIN_SEGMENT_POINTS))
-            trim2 = max(0, min(self.config.max_orphans_per_junction,
+            trim2 = max(0, min(MAX_ORPHANS_PER_JUNCTION,
                                points_count(n, right_limit, segment2.last_index) - MIN_SEGMENT_POINTS))
             squared_errors_seg1 = self._squared_errors_to_core_line(
                 (segment1.first_index + trim1) % n, left_limit, segment1.line_segment_params, relevant_points)
@@ -438,7 +437,7 @@ class FitterToPointsSequence:
         :returns (cut index i, gap) in window coordinates. Fewer orphans win ties."""
         w = len(head_cum)
         best_cost, best_i, best_gap = gapless_cost, gapless_i, 0
-        max_gap = min(self.config.max_orphans_per_junction, w - 2)  # each segment keeps >= 1 window point
+        max_gap = min(MAX_ORPHANS_PER_JUNCTION, w - 2)  # each segment keeps >= 1 window point
         for gap in range(1, max_gap + 1):
             # cut i: seg1 gets window points [0..i], orphans [i+1..i+gap], seg2 the rest
             candidates_count = w - 1 - gap

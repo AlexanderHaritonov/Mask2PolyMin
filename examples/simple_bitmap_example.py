@@ -83,7 +83,6 @@ def fit_polygon(contour, verbose=False):
         is_closed=True,
         config=FitterConfig(
             max_segments_count=15,
-            max_adjust_iterations=20,
             tolerance=0.2,
             verbose=verbose
         )

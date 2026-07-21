@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 from mask2polymin.line_segment_params import LineSegmentParams
 from mask2polymin.sequence_segment import SequenceSegment
-from mask2polymin.fit_to_points_sequence import FitterToPointsSequence
+from mask2polymin.fit_to_points_sequence import FitterToPointsSequence, MAX_ORPHANS_PER_JUNCTION
 
 def make_line_segment(whole_sequence: np.ndarray, i_start: int, i_end: int) -> LineSegmentParams:
     start = whole_sequence[i_start].astype(np.float64)
@@ -40,7 +40,7 @@ def assert_valid_separation(fitter, last1, first2):
     assert isinstance(last1, int)
     assert isinstance(first2, int)
     gap = (first2 - last1 - 1) % len(fitter.whole_sequence)
-    assert gap <= fitter.config.max_orphans_per_junction
+    assert gap <= MAX_ORPHANS_PER_JUNCTION
 
 # ---- Hardcoded testcases ----
 

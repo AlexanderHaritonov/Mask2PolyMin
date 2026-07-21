@@ -3,7 +3,7 @@ import pytest
 
 from mask2polymin.line_segment_params import LineSegmentParams
 from mask2polymin.sequence_segment import SequenceSegment, points_count
-from mask2polymin.fit_to_points_sequence import FitterToPointsSequence, FitterConfig, MIN_SEGMENT_POINTS
+from mask2polymin.fit_to_points_sequence import FitterToPointsSequence, FitterConfig, MIN_SEGMENT_POINTS, MAX_ORPHANS_PER_JUNCTION
 from mask2polymin.polyline import segments_to_polyline
 
 
@@ -128,7 +128,7 @@ def test_displaced_corners_end_to_end():
 
     assert len(segments) == 4
     gaps = junction_gaps(segments, len(fitter.whole_sequence))
-    assert all(g <= fitter.config.max_orphans_per_junction for g in gaps)
+    assert all(g <= MAX_ORPHANS_PER_JUNCTION for g in gaps)
     assert sum(gaps) >= 1  # orphaning fires at least at one displaced corner
     assert all(err <= 1.5 for err in vertex_errors(segments))
 
