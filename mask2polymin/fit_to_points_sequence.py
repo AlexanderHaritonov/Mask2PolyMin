@@ -18,8 +18,8 @@ MIN_POINTS_FOR_DIRECTION = 5
 # cos(~11°): merge candidates whose direction dot product falls below this diverge too much.
 COLLINEAR_DIRECTIONS_MIN_DOT = 0.98
 
-# A point's deviation must clear tolerance by this much (in squared-distance units, so 2x tolerance linear)
-LOCAL_DEFECT_MARGIN = 4.0
+# A point's deviation must clear tolerance by this much (in squared-distance units).
+LOCAL_DEFECT_MARGIN = 4.5
 
 @dataclass
 class FitterConfig:

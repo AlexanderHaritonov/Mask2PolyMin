@@ -3,8 +3,8 @@
 Three outstanding items that came out of the Option A/B/margin work on
 [fit_to_points_sequence.py](../mask2polymin/fit_to_points_sequence.py)'s termination logic and the
 subsequent per-family benchmark investigation. Unlike A/B/margin (already landed and committed),
-these three were not implemented yet; going through them one at a time, item 1 is now done (see
-its Resolved note below).
+these three were not implemented yet; going through them one at a time, items 1 and 2 are now done
+(see their Resolved notes below).
 
 ## Suggested order
 
@@ -14,11 +14,12 @@ its Resolved note below).
 2. **Re-tune `LOCAL_DEFECT_MARGIN`** after (1) lands — car's recall shortfall is *partly* explained
    by the margin (see evidence below), but not necessarily *entirely*; the corner-reconstruction fix
    may itself move car's numbers and change what "optimal" means. Re-run the car investigation after
-   (1), not before.
+   (1), not before. **Done.**
 3. **`max_deviation` split-ranking flag** is independent of the other two and can happen any time —
    it changes which segment gets picked *among several already-eligible ones*, not whether a defect
    is flagged or how a finished segmentation's corners get reconstructed.
 4. Promote the created params to config vals
+and cleanup/remove the helper files (margin_sweep.py and analyze_corner_angles.py)
 ---
 
 ## 1. `_corner()`'s plausibility check should be angle-aware, not just distance-aware
@@ -135,6 +136,38 @@ range? If the latter, alternatives worth considering (not yet explored):
 during the investigation: filter `synth_shapes.dataset()` to the relevant families/tolerances,
 call `mask2polymin()` directly, skip `rdp`/irrelevant tolerances — cuts a full sweep down to under a
 minute). Only run the full sweep once a candidate value looks good on the targeted check.
+
+**Resolved.** Changed `LOCAL_DEFECT_MARGIN` from 4.0 to 4.5 — see `performance_test/margin_sweep.py`
+for the sweep. Two things it found that reshape this item:
+
+Family-*pooled* recall is the wrong slice to tune against — it dilutes the real signal to noise.
+Car and plane's problem sizes are specifically their `d064` variant (`SMALL_SIZE_OVERRIDE`); their
+`d128`/`d320` instances already recall near-perfectly regardless of margin. Pooling across all three
+sizes put car's median recall at 1.0 for margin=4.0, masking that `car@d064` alone sits at 0.333 —
+exactly the plan's own cited number. Every other family is flat (1.0) across the whole tested range
+at this slice, at every size, so this isn't a broader aggregation problem — just car and plane.
+
+`car@d064`'s recall turned out to be a flat ceiling, not a smooth trade-off curve: 0.333 for every
+margin from 1.0 up through 4.5, dropping sharply to 0.111 at 4.6 and staying there through 30.0 (the
+highest value tried). No margin value recovers *more* than the current 4.0 already gets — the
+plan's hoped-for "intermediate value that recovers more of car's recall" doesn't exist on this axis;
+0.333 is margin-tuning's ceiling, short of "plain A"'s 0.389. `plane@d064` is completely flat at
+0.500 across the *entire* tested range (1.0-30.0) — margin has zero measurable effect on plane at
+any tested value, confirming the plan's claim far more thoroughly than the original two-point check.
+
+Since car@d064's ceiling holds flat through 4.5 but the tol=0.35 quantization-jitter metrics (pinned-
+at-cap fraction, precision) keep improving monotonically as margin increases even within that flat
+band, 4.5 is the exact highest value that preserves today's car/plane recall while giving strictly
+better jitter behavior than 4.0 (pinned-at-cap 56.7% → 54.7%, tol=0.35 precision 0.500 → 0.529 in the
+targeted check). A full benchmark re-run confirmed it end-to-end: `car@d064`'s five recall values
+are byte-identical to the pre-change run, plane's pooled recall is unchanged (0.5556, matching the
+step 1 benchmark exactly), and every other family/cell moves by a fraction of a percentage point or
+not at all. A small, low-risk tweak, not the recall recovery the plan's open question was hoping for.
+
+Closing the remaining car@d064 gap (0.333 → "plain A"'s 0.389) would need a different mechanism —
+the run-length idea below, or accepting the ceiling as inherent to a single global magnitude
+threshold — not further margin tuning; the sweep covers 1.0 through 30.0 and the ceiling never
+moves.
 
 ---
 
