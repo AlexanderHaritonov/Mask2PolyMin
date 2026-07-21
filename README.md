@@ -10,6 +10,13 @@ Unlike common point‑thinning algorithms (Ramer–Douglas–Peucker, Visvalinga
 - does not shrink the area or remove corners
 - reconstructs corners with sub-pixel accuracy: vertices are intersections of least-squares fitted lines.
 
+## Parameters
+**`tolerance`** (default `1.0`): the maximum perpendicular deviation, in input units (pixels), that a fitted line may have from the points it represents. Roughly, `tolerance ≈ epsilon / √2`, where `epsilon` is what you'd pass to Ramer–Douglas–Peucker — RDP's `epsilon` bounds the max (L∞) deviation, while `tolerance` bounds the L2 deviation.
+
+**Rule of thumb:** `tolerance ≈ max(1.0, jitter_amp)`, where `jitter_amp` how noisy the segmentation is - the standard deviation of how far the mask's boundary randomly wanders from its true edge.
+The `1.0` floor covers ordinary pixel-quantization jitter present even in a "clean" mask.
+
+
 ## Algorithm
 
 The input is an ordered sequence of contour points, open or closed. Lines are fitted by total least squares (minimizing perpendicular distances), and the segmentation is refined top-down:

@@ -4,6 +4,26 @@ Mask2PolyMin vs `cv2.approxPolyDP` (RDP) on synthetic GT shapes with simulated
 segmentation noise. Design and rationale: [Perf_Test_Plan.md](Perf_Test_Plan.md),
 [Synth_Shapes_Plan.md](Synth_Shapes_Plan.md). Run all commands from this folder.
 
+## Choosing tolerance for a given noise level
+
+`NOISE_LEVELS` in [synth_shapes.py](synth_shapes.py) defines each level's `jitter_amp` — the
+per-pixel standard deviation of the elastic boundary displacement used to simulate segmentation noise. Mask2PolyMin's `tolerance` should track that noise:
+
+```
+tolerance ≈ max(1.0, jitter_amp)
+```
+
+| noise level | jitter_amp (px) | recommended tolerance |
+|---|---|---|
+| 0 (clean) | 0.0 | 1.0 |
+| 1 (good segmentation net) | 0.5 | 1.0 |
+| 2 (decent) | 1.0 | 1.0 |
+| 3 (mediocre) | 1.75 | 1.75 |
+| 4 (sloppy) | 2.5 | 2.5 |
+
+This keeps the fitter from hitting `max_segments_count` pinned-at-cap distortion) at high noise,
+at the cost of being somewhat loose rather than tight-optimal
+
 ## 1. GT shapes — committed, regenerate only after a design change
 
 ```bash
