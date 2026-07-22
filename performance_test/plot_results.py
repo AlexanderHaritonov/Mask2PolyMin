@@ -279,29 +279,36 @@ def fig_segments_vs_rms(cells, out_path: Path, tier: int = 0) -> None:
     print(f"figure -> {out_path}")
 
 
-def fig_two_metrics_vs_noise(cells, metrics, suptitle: str, out_path: Path,
-                              tier: int = 0, share_y_across_rows: bool = False,
-                              legend_loc: str = "best") -> None:
-    """Two metrics (one per row) vs noise level, each level at its own noise-matched
-    tolerance -- one column per shape class. metrics is a list of 2
+def fig_metrics_vs_noise(cells, metrics, suptitle: str, out_path: Path,
+                          tier: int = 0, share_y_across_rows: bool = False,
+                          legend_loc: str = "best", note: str | None = None) -> None:
+    """1 or 2 metrics (one per row) vs noise level, each level at its own noise-matched
+    tolerance -- one column per shape class. metrics is a list of 1 or 2
     (metric_col, ylabel, ylim) tuples: ylim is an explicit (lo, hi); "floor0" to
     autoscale the top but pin the bottom at 0; "auto" to autoscale both ends freely
     (for ratio metrics like area_ratio that hover near 1 -- flooring at 0 would flatten
     all their variation into a sliver at the top); or None, which also autoscales both
     ends but adds a dashed 0 reference line (for signed metrics like corner_bias)."""
+    nrows = len(metrics)
     levels = sorted({k[2] for k in cells if k[0] == tier})
-    fig = plt.figure(figsize=(9.4, 8.0))
-    outer = gridspec.GridSpec(2, 2, figure=fig, height_ratios=(1, 9), hspace=0.12)
-    plot_cols = [gridspec.GridSpecFromSubplotSpec(2, 1, subplot_spec=outer[1, col], hspace=0.12)
-                 for col in range(2)]
+    if nrows == 1:
+        fig = plt.figure(figsize=(9.4, 6.1))
+        outer = gridspec.GridSpec(2, 2, figure=fig, height_ratios=(1, 5), hspace=0.12)
+        margins = dict(left=0.08, right=0.98, top=0.925, bottom=0.15)
+    else:
+        fig = plt.figure(figsize=(9.4, 8.0))
+        outer = gridspec.GridSpec(2, 2, figure=fig, height_ratios=(1, 9), hspace=0.12)
+        margins = dict(left=0.08, right=0.98, top=0.95, bottom=0.07)
+    plot_cols = [gridspec.GridSpecFromSubplotSpec(nrows, 1, subplot_spec=outer[1, col],
+                                                   hspace=0.12) for col in range(2)]
     # set final margins before reading any cell's get_position() (icons included) --
     # tight_layout doesn't account for the nested icon/plot gridspecs, so margins are
     # set by hand instead, up front, so every position query below reflects the real
     # layout, not matplotlib's defaults.
-    outer.update(left=0.08, right=0.98, top=0.95, bottom=0.07)
+    outer.update(**margins)
     _draw_icon_rows(fig, outer)
-    axes = [[None, None], [None, None]]
-    x_anchor, row_anchor = None, [None, None]
+    axes = [[None, None] for _ in range(nrows)]
+    x_anchor, row_anchor = None, [None] * nrows
     for row, (metric, ylabel, ylim) in enumerate(metrics):
         row_max = 0.0
         for col, shape_class in enumerate(SHAPE_CLASSES):
@@ -325,7 +332,7 @@ def fig_two_metrics_vs_noise(cells, metrics, suptitle: str, out_path: Path,
                 ax.set_title(shape_class, fontsize=10.5, color=INK, fontweight="bold")
             if col == 0:
                 ax.set_ylabel(ylabel, fontsize=9, color=INK_2)
-            if row == 1:
+            if row == nrows - 1:
                 ax.set_xlabel("noise level", fontsize=9, color=INK_2)
             _style(ax)
         if ylim == "floor0":
@@ -336,6 +343,8 @@ def fig_two_metrics_vs_noise(cells, metrics, suptitle: str, out_path: Path,
             row_anchor[row].set_ylim(0, row_max * 1.05 if row_max > 0 else 1.0)
     axes[0][0].legend(frameon=False, fontsize=9, labelcolor=INK, loc=legend_loc)
     fig.suptitle(suptitle, fontsize=11, color=INK)
+    if note is not None:
+        fig.text(0.5, 0.018, note, ha="center", fontsize=8, color=INK_2, style="italic")
     fig.savefig(out_path, dpi=FIG_DPI)
     plt.close(fig)
     print(f"figure -> {out_path}")
@@ -343,7 +352,7 @@ def fig_two_metrics_vs_noise(cells, metrics, suptitle: str, out_path: Path,
 
 def fig_corner_recall(cells, out_path: Path, tier: int = 0) -> None:
     """Plan plot 2: median corner recall and precision vs noise level."""
-    fig_two_metrics_vs_noise(
+    fig_metrics_vs_noise(
         cells,
         [("corner_recall", "median corner recall", (0, 1.05)),
          ("corner_precision", "median corner precision", (0, 1.05))],
@@ -351,33 +360,42 @@ def fig_corner_recall(cells, out_path: Path, tier: int = 0) -> None:
         out_path, tier=tier, share_y_across_rows=True, legend_loc="lower left")
 
 
-# additional fidelity metrics, paired two-per-figure in the same simple/complex,
+# additional fidelity metrics, one or two per figure, in the same simple/complex,
 # icon-strip style as fig1/fig2 -- ylim "floor0" autoscales the top but pins the
-# bottom at 0; None autoscales freely and draws a dashed 0 reference line (corner_bias
-# is signed: positive = corner-cutting, negative = overshoot)
-FIDELITY_PAIRS = [
+# bottom at 0; "auto" autoscales both ends (ratio metrics that hover near 1, where a
+# 0 floor would flatten all the variation into a sliver at the top); None also
+# autoscales both ends but draws a dashed 0 reference line (corner_bias is signed:
+# positive = corner-cutting, negative = overshoot)
+FIDELITY_CHARTS = [
     ("fig3_hausdorff.png",
      [("hausdorff", "median Hausdorff (px)", "floor0"),
       ("hd95", "median HD95 (px)", "floor0")],
-     "boundary distance vs noise, each level at its noise-matched tolerance"),
+     "boundary distance vs noise, each level at its noise-matched tolerance", None),
     ("fig4_rms.png",
      [("rms_sym", "median symmetric RMS (px)", "floor0"),
       ("rms_dir", "median directed RMS (px)", "floor0")],
-     "RMS boundary error vs noise, each level at its noise-matched tolerance"),
-    ("fig5_corner_position.png",
-     [("corner_loc_err", "median corner loc. error (px)", "floor0"),
-      ("corner_bias", "median corner bias (px)", None)],
-     "corner positional error vs noise, each level at its noise-matched tolerance "
-     "(τ = 2 px)"),
-    ("fig6_area_perimeter.png",
-     [("area_ratio", "median area ratio", "auto"),
-      ("perimeter_ratio", "median perimeter ratio", "auto")],
-     "area / perimeter ratio vs noise, each level at its noise-matched tolerance"),
-    ("fig7_iou_angle.png",
-     [("iou", "median IoU", "auto"),
-      ("corner_angle_err", "median corner angle error (deg)", "floor0")],
-     "IoU and corner turning-angle error vs noise, each level at its noise-matched "
-     "tolerance"),
+     "RMS boundary error vs noise, each level at its noise-matched tolerance", None),
+    ("fig5_corner_loc_err.png",
+     [("corner_loc_err", "median corner loc. error (px)", "floor0")],
+     "corner localization error vs noise, each level at its noise-matched tolerance "
+     "(τ = 2 px)", None),
+    ("fig6_corner_bias.png",
+     [("corner_bias", "median corner bias (px)", None)],
+     "corner bias vs noise, each level at its noise-matched tolerance (τ = 2 px)",
+     "positive = corner-cutting (shrinks inward), negative = overshoot"),
+    ("fig7_area.png",
+     [("area_ratio", "median area ratio", "auto")],
+     "area ratio vs noise, each level at its noise-matched tolerance", None),
+    ("fig8_perimeter.png",
+     [("perimeter_ratio", "median perimeter ratio", "auto")],
+     "perimeter ratio vs noise, each level at its noise-matched tolerance", None),
+    ("fig9_iou.png",
+     [("iou", "median IoU", "auto")],
+     "IoU vs noise, each level at its noise-matched tolerance", None),
+    ("fig10_corner_angle.png",
+     [("corner_angle_err", "median corner angle error (deg)", "floor0")],
+     "corner turning-angle error vs noise, each level at its noise-matched tolerance "
+     "(τ = 2 px)", None),
 ]
 
 
@@ -431,8 +449,8 @@ def main() -> None:
     out.mkdir(parents=True, exist_ok=True)
     fig_segments_vs_rms(cells, out / "fig1_segments_vs_rms.png")
     fig_corner_recall(cells, out / "fig2_corner_recall.png")
-    for filename, metrics, suptitle in FIDELITY_PAIRS:
-        fig_two_metrics_vs_noise(cells, metrics, suptitle, out / filename)
+    for filename, metrics, suptitle, note in FIDELITY_CHARTS:
+        fig_metrics_vs_noise(cells, metrics, suptitle, out / filename, note=note)
 
 
 if __name__ == "__main__":

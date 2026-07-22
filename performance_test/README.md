@@ -54,7 +54,33 @@ and renders `results/charts/`:
 [fig2_corner_recall.png](results/charts/fig2_corner_recall.png),
 [fig3_hausdorff.png](results/charts/fig3_hausdorff.png),
 [fig4_rms.png](results/charts/fig4_rms.png),
-[fig5_corner_position.png](results/charts/fig5_corner_position.png),
-[fig6_area_perimeter.png](results/charts/fig6_area_perimeter.png),
-[fig7_iou_angle.png](results/charts/fig7_iou_angle.png)
+[fig5_corner_loc_err.png](results/charts/fig5_corner_loc_err.png),
+[fig6_corner_bias.png](results/charts/fig6_corner_bias.png),
+[fig7_area.png](results/charts/fig7_area.png),
+[fig8_perimeter.png](results/charts/fig8_perimeter.png),
+[fig9_iou.png](results/charts/fig9_iou.png),
+[fig10_corner_angle.png](results/charts/fig10_corner_angle.png)
 -- each split simple vs. complex (car/plane/ship) shapes.
+
+## Metrics
+
+Full definitions in [metrics.py](metrics.py); `n_input_points`, `n_segments`, `wall_time_ms` are
+recorded directly in [run_benchmark.py](run_benchmark.py).
+
+| metric | meaning |
+|---|---|
+| `n_input_points` | vertex count of the extracted (noisy) input contour |
+| `n_segments` | vertex count of the fitted polygon -- lower is a more compact fit |
+| `hausdorff` | symmetric max boundary distance to GT, px -- worst-case error, one outlier dominates |
+| `hd95` | 95th-percentile symmetric boundary distance, px -- robust companion to `hausdorff` |
+| `iou` | intersection-over-union of fitted vs. GT filled area |
+| `rms_sym` | symmetric RMS boundary distance to GT, px -- sees both dropped features and invented geometry |
+| `rms_dir` | directed RMS, GT → fit, px -- sees dropped features only; compare to `rms_sym` to spot invented geometry |
+| `corner_recall` | fraction of GT corners with a fitted vertex within τ=2px |
+| `corner_precision` | fraction of fitted vertices within τ of a GT corner -- penalizes spurious vertices |
+| `corner_loc_err` | mean GT-corner → nearest-fitted-vertex distance, px, over recalled corners |
+| `corner_bias` | signed corner displacement, px -- positive = corner-cutting (inward), negative = overshoot (outward) |
+| `corner_angle_err` | mean absolute turning-angle error at matched corners, degrees -- catches wrong local shape even when position looks fine |
+| `area_ratio` | fitted / GT area -- <1 corners cut, >1 overshoot; insensitive to spurious co-linear vertices |
+| `perimeter_ratio` | fitted / GT perimeter -- same reading as `area_ratio` |
+| `wall_time_ms` | fit time per contour, milliseconds |

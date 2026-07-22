@@ -75,6 +75,10 @@ python -m venv .venv && source .venv/bin/activate && pip install -r requirements
 ## Performance
 The implementation is optimized, uses NumPy broadcasting.
 
+Benchmarked against RDP (`cv2.approxPolyDP`) on synthetic shapes across noise levels
+([performance_test/](performance_test/)): comparable on most fidelity metrics (IoU, RMS, Hausdorff), but RDP shows a growing corner-cutting bias under noise that Mask2PolyMin does not — see [corner_bias](performance_test/results/charts/fig6_corner_bias.png) and RDP's perimeter shrinkage in [perimeter_ratio](performance_test/results/charts/fig8_perimeter.png).
+The tradeoff is speed: Mask2PolyMin's iterative line-fitting is far slower.
+
 ## future work and ideas
 - performance tests and comparison
 - Generalize orphaning to segment interiors ?
