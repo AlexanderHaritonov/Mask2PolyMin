@@ -18,7 +18,9 @@ import time
 from pathlib import Path
 
 from baselines import mask2polymin, rdp_opencv
-from metrics import corner_metrics, hausdorff, hd95, iou_rasterized, rms_directed, rms_distance
+from metrics import (area_ratio, corner_bias, corner_metrics, corner_turning_angle_error,
+                      hausdorff, hd95, iou_rasterized, perimeter_ratio, rms_directed,
+                      rms_distance)
 from synth_shapes import NOISE_LEVELS, dataset
 
 RESULTS_DIR = Path(__file__).parent / "results"
@@ -38,6 +40,7 @@ def matched_pair(noise_level: int) -> tuple[float, float]:
 COLUMNS = ["contour_id", "tier", "n_input_points", "algorithm", "tolerance",
            "noise_level", "n_segments", "hausdorff", "hd95", "iou", "rms_sym",
            "rms_dir", "corner_recall", "corner_precision", "corner_loc_err",
+           "corner_bias", "corner_angle_err", "area_ratio", "perimeter_ratio",
            "wall_time_ms"]
 
 
@@ -49,6 +52,8 @@ def measure(record: dict, algorithm: str, fit_fn, tolerance: float) -> dict:
     wall_ms = (time.perf_counter() - t0) * 1e3
     gt_poly = record["gt_polygon_xy"]
     recall, precision, loc_err = corner_metrics(record["gt_corners_xy"], poly)
+    bias = corner_bias(gt_poly, record["gt_corners_xy"], poly)
+    angle_err = corner_turning_angle_error(gt_poly, record["gt_corners_xy"], poly)
     return {
         "contour_id": record["contour_id"],
         "tier": 0,
@@ -65,6 +70,10 @@ def measure(record: dict, algorithm: str, fit_fn, tolerance: float) -> dict:
         "corner_recall": round(recall, 4),
         "corner_precision": round(precision, 4),
         "corner_loc_err": round(loc_err, 4),
+        "corner_bias": round(bias, 4),
+        "corner_angle_err": round(angle_err, 4),
+        "area_ratio": round(area_ratio(poly, gt_poly), 5),
+        "perimeter_ratio": round(perimeter_ratio(poly, gt_poly), 5),
         "wall_time_ms": round(wall_ms, 3),
     }
 

@@ -155,6 +155,149 @@ def corner_metrics(
     return recall, precision, loc_err
 
 
+def _turning_angle(prev_pt: np.ndarray, vertex: np.ndarray, next_pt: np.ndarray) -> float:
+    """Signed turning angle in radians at `vertex`, from edge (prev->vertex) to edge
+    (vertex->next): 0 for a straight line, +-pi for a full reversal."""
+    d_in = vertex - prev_pt
+    d_out = next_pt - vertex
+    d_in = d_in / np.linalg.norm(d_in)
+    d_out = d_out / np.linalg.norm(d_out)
+    cross = d_in[0] * d_out[1] - d_in[1] * d_out[0]
+    dot = float(np.clip(d_in @ d_out, -1.0, 1.0))
+    return float(np.arctan2(cross, dot))
+
+
+def corner_turning_angle_error(gt_polygon: np.ndarray, gt_corners: np.ndarray, poly: np.ndarray,
+                                tau: float = 2.0) -> float:
+    """Mean absolute turning-angle error in degrees at matched corners.
+
+    For each GT corner with a fitted vertex within `tau`, compares the GT polygon's
+    turning angle at that corner (using its own GT neighbors) against the fitted
+    polygon's turning angle at its nearest vertex (using that vertex's own fitted
+    neighbors -- a different adjacency than the GT's).
+
+    Catches a failure mode `corner_metrics` is blind to: a vertex can sit right on the
+    true corner (recall=1, loc_err=0 for it) while the local shape there is still wrong,
+    because a *neighboring* vertex is misplaced -- corner_metrics only ever checks vertex
+    position, never the angle the two adjacent edges actually form.
+
+    gt_polygon : (P, 2) closed GT polygon in (x, y); first point equals last.
+                 gt_corners must equal gt_polygon[:-1] in the same walking order (true of
+                 every Tier 0 record) since GT neighbors are looked up by index into it.
+    gt_corners : (K, 2) ground-truth corner positions in (x, y)
+    poly       : (M, 2) closed fitted polyline in (x, y); first point equals last
+    tau        : matching radius in px, same convention as corner_metrics
+    returns    : mean absolute turning-angle error in degrees over matched corners
+                 (NaN if none matched)
+    """
+    # Turning-angle sign depends on winding direction; the hand-authored GT polygons and
+    # the extracted-contour-derived fits aren't guaranteed to wind the same way (and in
+    # practice usually don't -- cv2.findContours has its own convention). Reverse the
+    # fitted polygon's traversal, not its vertex positions, so signs are comparable.
+    gt_area, _ = _polygon_area_and_centroid(gt_polygon)
+    poly_area, _ = _polygon_area_and_centroid(poly)
+    if np.sign(gt_area) != np.sign(poly_area):
+        poly = poly[::-1]
+
+    gt_verts = gt_polygon[:-1]
+    n_gt = len(gt_verts)
+    fit_verts = poly[:-1]
+    n_fit = len(fit_verts)
+
+    dmat = np.linalg.norm(gt_corners[:, None, :] - fit_verts[None, :, :], axis=2)
+    nearest_idx = dmat.argmin(axis=1)
+    matched = dmat.min(axis=1) <= tau
+    if not matched.any():
+        return float("nan")
+
+    errors = []
+    for k in np.flatnonzero(matched):
+        gt_angle = _turning_angle(gt_verts[(k - 1) % n_gt], gt_verts[k], gt_verts[(k + 1) % n_gt])
+        j = int(nearest_idx[k])
+        fit_angle = _turning_angle(fit_verts[(j - 1) % n_fit], fit_verts[j], fit_verts[(j + 1) % n_fit])
+        diff = (gt_angle - fit_angle + np.pi) % (2 * np.pi) - np.pi  # wrap to [-pi, pi]
+        errors.append(abs(diff))
+    return float(np.degrees(np.mean(errors)))
+
+
+def _polygon_area_and_centroid(poly: np.ndarray) -> tuple[float, np.ndarray]:
+    """Signed area and centroid of a closed polygon via the shoelace formula.
+
+    poly : (N, 2) closed polyline in (x, y); first point equals last.
+    """
+    x, y = poly[:-1, 0], poly[:-1, 1]
+    x_next, y_next = poly[1:, 0], poly[1:, 1]
+    cross = x * y_next - x_next * y
+    area = 0.5 * cross.sum()
+    cx = ((x + x_next) * cross).sum() / (6 * area)
+    cy = ((y + y_next) * cross).sum() / (6 * area)
+    return float(area), np.array([cx, cy])
+
+
+def corner_bias(gt_polygon: np.ndarray, gt_corners: np.ndarray, poly: np.ndarray, tau: float = 2.0) -> float:
+    """Mean signed displacement of matched fitted vertices relative to their GT corner,
+    projected onto the corner→centroid direction.
+
+    Positive → corner cutting (displaced toward the interior); negative → overshoot
+    (displaced outward); ~0 → no systematic directional bias. Unlike `corner_metrics`'
+    `loc_err` (an unsigned distance), this distinguishes "close but consistently pulled
+    inward" from "unbiased scatter" — e.g. RDP connects existing boundary samples with
+    straight chords, which on a convex corner mathematically cannot land outside the true
+    corner, so it should show a positive bias even where its raw distance is small.
+
+    gt_polygon : (P, 2) closed GT polygon in (x, y), first point equals last — used only
+                 for its centroid, the "which way is inward" reference
+    gt_corners : (K, 2) ground-truth corner positions in (x, y)
+    poly       : (M, 2) closed fitted polyline in (x, y); first point equals last
+    tau        : matching radius in px, same convention as corner_metrics
+    returns    : mean signed inward displacement over matched corners (NaN if none matched)
+    """
+    _, centroid = _polygon_area_and_centroid(gt_polygon)
+    verts = poly[:-1]
+    dmat = np.linalg.norm(gt_corners[:, None, :] - verts[None, :, :], axis=2)
+    nearest_idx = dmat.argmin(axis=1)
+    matched = dmat.min(axis=1) <= tau
+    if not matched.any():
+        return float("nan")
+    inward_dir = centroid[None, :] - gt_corners
+    inward_dir /= np.linalg.norm(inward_dir, axis=1, keepdims=True)
+    displacement = verts[nearest_idx] - gt_corners
+    signed = np.sum(displacement * inward_dir, axis=1)
+    return float(signed[matched].mean())
+
+
+def area_ratio(poly: np.ndarray, gt_polygon: np.ndarray) -> float:
+    """fitted area / GT area (unsigned, so winding direction doesn't matter).
+
+    < 1 → the fit encloses less area than the GT shape (corners cut/rounded off);
+    > 1 → it encloses more (overshoot). Insensitive to spurious co-linear vertices
+    (e.g. noise-tracking points along an already-straight edge don't change the
+    enclosed area), unlike corner_metrics' precision.
+
+    poly, gt_polygon : (N, 2) closed polylines in (x, y); first point equals last
+    """
+    fit_area, _ = _polygon_area_and_centroid(poly)
+    gt_area, _ = _polygon_area_and_centroid(gt_polygon)
+    return float(abs(fit_area) / abs(gt_area))
+
+
+def _perimeter(poly: np.ndarray) -> float:
+    """Total edge length of a closed polyline."""
+    return float(np.linalg.norm(np.diff(poly, axis=0), axis=1).sum())
+
+
+def perimeter_ratio(poly: np.ndarray, gt_polygon: np.ndarray) -> float:
+    """fitted perimeter / GT perimeter.
+
+    < 1 → shorter boundary path (corner-cutting shrinks perimeter on convex shapes);
+    > 1 → longer (overshoot, or spurious detours). Also insensitive to spurious
+    co-linear vertices, same reasoning as area_ratio.
+
+    poly, gt_polygon : (N, 2) closed polylines in (x, y); first point equals last
+    """
+    return float(_perimeter(poly) / _perimeter(gt_polygon))
+
+
 # ---------------------------------------------------------------------------
 # Self-test: run with  python metrics.py
 # ---------------------------------------------------------------------------
@@ -275,6 +418,83 @@ if __name__ == "__main__":
     rec, prec, err = corner_metrics(sq_corners, sq_mid)
     print(f"corner_metrics(sq, sq+midpoints) = recall {rec:.2f}, precision {prec:.2f}  (expect 1.0, 0.5)")
     assert rec == 1.0 and prec == 0.5 and err < 1e-9
+    print("  ✓")
+
+    # --- 5. corner_bias: signed direction, not just distance ---
+    # small chamfer (1px, within tau=2 so all 4 corners still match): pulled toward the
+    # interior at every corner -> positive bias
+    ch_small = 1.0
+    chamfered_small = np.array(
+        [[ch_small, 0], [100 - ch_small, 0], [100, ch_small], [100, 100 - ch_small],
+         [100 - ch_small, 100], [ch_small, 100], [0, 100 - ch_small], [0, ch_small], [ch_small, 0]],
+        dtype=float,
+    )
+    bias_in = corner_bias(sq, sq_corners, chamfered_small)
+    print(f"corner_bias(sq, small chamfer) = {bias_in:.4f}  (expect > 0, corner-cutting)")
+    assert bias_in > 0
+    print("  ✓")
+
+    # one corner pushed past the true corner, away from the centroid -> negative bias
+    sq_overshoot = np.array([[-1, -1], [100, 0], [100, 100], [0, 100], [-1, -1]], dtype=float)
+    bias_out = corner_bias(sq, sq_corners, sq_overshoot)
+    print(f"corner_bias(sq, one corner overshot) = {bias_out:.4f}  (expect < 0)")
+    assert bias_out < 0
+    print("  ✓")
+
+    # exact square: no directional bias either way
+    bias_exact = corner_bias(sq, sq_corners, sq)
+    print(f"corner_bias(sq, sq) = {bias_exact:.4f}  (expect 0.0)")
+    assert abs(bias_exact) < 1e-9
+    print("  ✓")
+
+    # --- 6. area_ratio / perimeter_ratio ---
+    ar = area_ratio(sq, sq)
+    pr = perimeter_ratio(sq, sq)
+    print(f"area_ratio(sq, sq) = {ar:.4f}, perimeter_ratio(sq, sq) = {pr:.4f}  (expect 1.0, 1.0)")
+    assert abs(ar - 1.0) < 1e-9 and abs(pr - 1.0) < 1e-9
+    print("  ✓")
+
+    # 5px chamfer from the corner_metrics test above: strictly less area and perimeter
+    ar_ch = area_ratio(chamfered, sq)
+    pr_ch = perimeter_ratio(chamfered, sq)
+    print(f"area_ratio(chamfered, sq) = {ar_ch:.4f}, perimeter_ratio(chamfered, sq) = {pr_ch:.4f}"
+          f"  (expect < 1.0 for both)")
+    assert 0.9 < ar_ch < 1.0
+    assert 0.9 < pr_ch < 1.0
+    print("  ✓")
+
+    # spurious co-linear midpoints don't change the enclosed shape at all
+    ar_mid = area_ratio(sq_mid, sq)
+    pr_mid = perimeter_ratio(sq_mid, sq)
+    print(f"area_ratio(sq+midpoints, sq) = {ar_mid:.4f}, perimeter_ratio(sq+midpoints, sq) = {pr_mid:.4f}"
+          f"  (expect 1.0, 1.0 -- unlike corner precision, unaffected by spurious co-linear vertices)")
+    assert abs(ar_mid - 1.0) < 1e-9 and abs(pr_mid - 1.0) < 1e-9
+    print("  ✓")
+
+    # --- 7. corner_turning_angle_error: catches what position-only checks miss ---
+    # A small (10x10) square: a within-tau perpendicular shift of one vertex still
+    # meaningfully rotates the *short* edge it anchors, unlike on the 100x100 sq above.
+    sq_small = np.array([[0, 0], [10, 0], [10, 10], [0, 10], [0, 0]], dtype=float)
+    sq_small_corners = sq_small[:-1]
+
+    err_exact = corner_turning_angle_error(sq_small, sq_small_corners, sq_small)
+    print(f"corner_turning_angle_error(sq_small, sq_small) = {err_exact:.4f}  (expect 0.0)")
+    assert err_exact < 1e-6
+    print("  ✓")
+
+    # (0,0) sits exactly on its true corner; neighbor (10,0) is nudged to (10,1.9) -- still
+    # within tau=2 of ITS OWN corner, so corner_metrics calls every vertex fully recalled
+    # -- but that nudge rotates the short edge into (0,0) enough to visibly change the
+    # turning angle *at (0,0)*, which corner_metrics never looks at.
+    fit_distorted_neighbor = np.array([[0, 0], [10, 1.9], [10, 10], [0, 10], [0, 0]], dtype=float)
+    rec, prec, _ = corner_metrics(sq_small_corners, fit_distorted_neighbor)
+    print(f"corner_metrics(sq_small, distorted neighbor) = recall {rec:.2f}, precision {prec:.2f}  "
+          f"(both 1.0: every vertex is within tau of some corner)")
+    assert rec == 1.0 and prec == 1.0
+    err_angle = corner_turning_angle_error(sq_small, sq_small_corners, fit_distorted_neighbor)
+    print(f"corner_turning_angle_error(sq_small, distorted neighbor) = {err_angle:.4f} deg "
+          f"(expect > 3 -- corner_metrics missed this)")
+    assert err_angle > 3.0
     print("  ✓")
 
     print("\nAll metric self-tests passed.")

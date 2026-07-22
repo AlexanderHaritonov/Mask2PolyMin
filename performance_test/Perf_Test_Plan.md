@@ -24,9 +24,13 @@ Note: "equivalent fidelity" is not a realistic target — Mask2PolyMin least-squ
 | **Corner recall** | Did corners survive? | fraction of GT corners with a fitted vertex within τ = 2 px |
 | **Corner precision** | Spurious vertices? | fraction of fitted vertices within τ of a GT corner |
 | **Corner localization error** | How precisely? | mean distance GT corner → nearest fitted vertex, over matched corners |
+| **Corner bias** | Corner-cutting vs. overshoot — *directional*, not just distance | mean signed displacement of matched vertices, projected onto the corner→GT-centroid direction; > 0 = pulled inward (cut), < 0 = pushed outward (overshoot) |
+| **Corner turning-angle error** | Is the local shape at a corner right, not just its position? | mean absolute difference (degrees) between the GT's and the fit's turning angle at matched corners, each using its own polygon's neighbors |
+| **Area ratio** | Area preservation / shrinkage | fitted polygon area ÷ GT polygon area (shoelace formula) |
+| **Perimeter ratio** | Perimeter preservation / shrinkage | fitted polygon perimeter ÷ GT polygon perimeter |
 | **Time per contour** | Speed | `time.perf_counter()` |
 
-Corner metrics require ground-truth corners → Tier 0 only. IoU alone is not a corner metric: rounding a corner by chamfer *d* costs only ~*d*²/2 px of area.
+Corner metrics require ground-truth corners → Tier 0 only. IoU alone is not a corner metric: rounding a corner by chamfer *d* costs only ~*d*²/2 px of area — corner bias, area ratio, and perimeter ratio are the more direct instruments for the "no shrinkage, no rounding" half of the Goal above; recall/precision/loc_err alone can't distinguish a vertex that's merely *near* the right spot from one that's specifically pulled toward the interior, nor can they see a systematic area/perimeter shortfall that stays under any per-vertex distance threshold.
 
 ## Baselines
 
@@ -86,7 +90,9 @@ regenerable function of committed inputs); commit `results/summary.csv` and the
 figures — they're the claims a reader should be able to see without rerunning.
 
 ```
-metrics.py               # hausdorff, hd95, rms_distance (sym), rms_directed, iou, corner metrics   [done]
+metrics.py               # hausdorff, hd95, rms_distance (sym), rms_directed, iou, corner metrics
+                          # (recall/precision/loc_err/bias/turning-angle err), area_ratio,
+                          # perimeter_ratio   [done]
 baselines.py             # rdp_opencv, mask2polymin wrappers + smoke test               [done]
 synth_shapes.py          # Tier 0: GT polygons + mask distortion + dataset()           [done]
 fetch_coco.py            # Tier 1: download + cache
@@ -99,11 +105,13 @@ One row per (contour, algorithm); failures are logged and skipped, not fatal:
 
 ```
 contour_id, tier, n_input_points, algorithm, tolerance, noise_level,
-n_segments, hausdorff, hd95, iou, rms_sym, rms_dir, corner_recall, corner_precision, corner_loc_err, wall_time_ms
+n_segments, hausdorff, hd95, iou, rms_sym, rms_dir, corner_recall, corner_precision,
+corner_loc_err, corner_bias, corner_angle_err, area_ratio, perimeter_ratio, wall_time_ms
 ```
 
 `tolerance` holds each row's noise-matched value (epsilon for `rdp`, tolerance for `mask2polymin`) — a derived record of what ran, not an independent sweep axis.
 `rms_dir` is reference → fit (the direction RDP's ε bounds); `rms_sym` ≫ `rms_dir` flags a fit that invented geometry the reference lacks (e.g. overshot corners).
+`corner_bias`, `corner_angle_err`, `area_ratio`, and `perimeter_ratio` are NaN-able the same way `corner_loc_err` is (undefined when a row recalled zero corners); `plot_results.py`'s aggregation is already nan-aware for this.
 
 Aggregate median / p25 / p75 / p95 per (tier, algorithm, noise_level) → `summary.csv`.
 
@@ -111,6 +119,8 @@ Aggregate median / p25 / p75 / p95 per (tier, algorithm, noise_level) → `summa
 
 1. ~~`metrics.py` core~~ + `baselines.py` + smoke test — **done**.
 2. ~~Corner metrics in `metrics.py` (`corner_metrics`: recall, precision, localization error)~~ — **done**.
+   Extended with `corner_bias` (signed, directional), `corner_turning_angle_error` (local
+   shape at a corner, not just position), `area_ratio`, `perimeter_ratio` — **done**.
 3. ~~`synth_shapes.py` + Tier 0 run~~ — **done**: 5-level noise ladder, one noise-matched
    tolerance per level, 3900 rows in gitignored `results/raw.csv` (1950 contours ×
    2 algorithms, 0 failures);
