@@ -1,8 +1,8 @@
 """
 Aggregation and figures for the benchmark results, per Perf_Test_Plan.md.
 
-Reads results/raw.csv and aggregates mean / median of every metric per (tier, algorithm,
-noise_level, shape_class) cell -> results/summary.csv, prints the per-cell median table,
+Reads summarized_csvs/raw.csv and aggregates mean / median of every metric per (tier, algorithm,
+noise_level, shape_class) cell -> summarized_csvs/summary.csv, prints the per-cell median table,
 and renders the Tier 0 figures (plan plots 1-2), each split simple vs. complex
 (car/plane/ship) shapes. Each noise level has exactly one (rdp_eps, m2p_tol) pair --
 matched to it by run_benchmark.matched_pair, not swept -- so tolerance is carried along as
@@ -24,7 +24,8 @@ import numpy as np
 
 from synth_shapes import family_sizes, gt_polygon
 
-RESULTS_DIR = Path(__file__).parent / "results"
+RESULTS_DIR = Path(__file__).parent / "summarized_csvs"
+CHARTS_DIR = Path(__file__).parent / "charts"
 FIG_DPI = 150
 
 # categorical palette slots 1-2 (validated order) + neutral inks, light surface
@@ -452,7 +453,7 @@ def main() -> None:
     write_summary(runtime_rows, args.out.parent / "runtime_summary.csv")
     print_runtime_summary(runtime_rows)
     print(f"\n{len(runtime_rows)} rows -> {args.out.parent / 'runtime_summary.csv'}")
-    out = args.out.parent / "charts"
+    out = CHARTS_DIR
     out.mkdir(parents=True, exist_ok=True)
     fig_segments_vs_rms(cells, out / "fig1_segments_vs_rms.png")
     fig_corner_recall(cells, out / "fig2_corner_recall.png")

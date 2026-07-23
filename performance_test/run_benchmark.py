@@ -1,6 +1,6 @@
 """
 Tier 0 benchmark runner: contours x algorithms, one noise-matched tolerance per noise
-level -> results/raw.csv.
+level -> summarized_csvs/raw.csv.
 
 Consumes `synth_shapes.dataset()` (the single enumeration point, 1950 contours) and runs
 both algorithms once per contour, at the (eps, tol) pair matched to that contour's own
@@ -23,7 +23,7 @@ from metrics import (area_ratio, corner_bias, corner_metrics, corner_turning_ang
                       rms_distance)
 from synth_shapes import NOISE_LEVELS, dataset
 
-RESULTS_DIR = Path(__file__).parent / "results"
+RESULTS_DIR = Path(__file__).parent / "summarized_csvs"
 
 
 def matched_pair(noise_level: int) -> tuple[float, float]:

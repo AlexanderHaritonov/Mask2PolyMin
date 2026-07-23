@@ -3,11 +3,11 @@ Per-metric win/loss charts: for each metric, per shape class, how much mask2poly
 wins or loses against RDP on average across noise levels, and how often -- per
 Comparison_Charts_Plan.md.
 
-Reads results/raw.csv, pairs rdp/mask2polymin rows by contour_id (same noisy contour,
+Reads summarized_csvs/raw.csv, pairs rdp/mask2polymin rows by contour_id (same noisy contour,
 same noise-matched tolerance -- see run_benchmark.matched_pair), computes a per-contour
 `comparison` value per metric (positive = mask2polymin better, direction-normalized --
-see BETTER_DIRECTION), aggregates to results/comparison_summary.csv, and renders
-comparison_*.png in results/charts/.
+see BETTER_DIRECTION), aggregates to summarized_csvs/comparison_summary.csv, and renders
+comparison_*.png in charts/.
 """
 import csv
 from collections import defaultdict
@@ -21,7 +21,7 @@ from matplotlib import pyplot as plt
 import numpy as np
 
 from plot_results import (
-    RESULTS_DIR, FIG_DPI, COLORS, INK, INK_2, SHAPE_CLASSES,
+    RESULTS_DIR, CHARTS_DIR, FIG_DPI, COLORS, INK, INK_2, SHAPE_CLASSES,
     _shape_class, _style, _draw_icon_rows,
 )
 
@@ -248,7 +248,7 @@ def main() -> None:
     write_summary(rows, RESULTS_DIR / "comparison_summary.csv")
     print(f"{len(rows)} cells -> {RESULTS_DIR / 'comparison_summary.csv'}")
 
-    out = RESULTS_DIR / "charts"
+    out = CHARTS_DIR
     out.mkdir(parents=True, exist_ok=True)
     for filename, metrics, suptitle in FIGURES:
         fig_comparison(buckets, metrics, suptitle, out / filename)

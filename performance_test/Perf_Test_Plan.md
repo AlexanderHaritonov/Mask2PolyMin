@@ -85,8 +85,8 @@ GT polygons in `gtFine/*_polygons.json`; enables comparison with Polygon-RNN++ /
 
 ## Implementation
 
-Code in [performance_test/](.). Gitignore `data/` and `results/raw.csv` (a pure,
-regenerable function of committed inputs); commit `results/summary.csv` and the
+Code in [performance_test/](.). Gitignore `data/` and `summarized_csvs/raw.csv` (a pure,
+regenerable function of committed inputs); commit `summarized_csvs/summary.csv` and the
 figures — they're the claims a reader should be able to see without rerunning.
 
 ```
@@ -122,7 +122,7 @@ Aggregate median / p25 / p75 / p95 per (tier, algorithm, noise_level) → `summa
    Extended with `corner_bias` (signed, directional), `corner_turning_angle_error` (local
    shape at a corner, not just position), `area_ratio`, `perimeter_ratio` — **done**.
 3. ~~`synth_shapes.py` + Tier 0 run~~ — **done**: 5-level noise ladder, one noise-matched
-   tolerance per level, 3900 rows in gitignored `results/raw.csv` (1950 contours ×
+   tolerance per level, 3900 rows in gitignored `summarized_csvs/raw.csv` (1950 contours ×
    2 algorithms, 0 failures);
    shape/noise review gates in [Synth_Shapes_Plan.md](Synth_Shapes_Plan.md) both closed;
    aggregation (median/p25/p75/p95 → `summary.csv`) in `plot_results.py`, figures pending.

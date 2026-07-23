@@ -80,7 +80,7 @@ shape) exact ties will be common, sometimes the majority. A low win-count bar th
 "mostly tied," not "mask2polymin mostly loses" — the per-bar `win_count/n_pairs` label
 above is what keeps that legible instead of looking like a loss.
 
-## Aggregation: `results/comparison_summary.csv`
+## Aggregation: `summarized_csvs/comparison_summary.csv`
 
 One row per `(metric, shape_class, noise_level)`:
 

@@ -40,7 +40,7 @@ Optional reviews: `--preview` (per-family renders),
 python run_benchmark.py            # ~10 min; --limit N for a quick smoke pass
 ```
 
-Produces `results/raw.csv` (gitignored): 3900 rows = 1950 contours × 2 algorithms, one row per run.
+Produces `summarized_csvs/raw.csv` (gitignored): 3900 rows = 1950 contours × 2 algorithms, one row per run.
 
 ## 3. Aggregate + figures
 
@@ -48,21 +48,21 @@ Produces `results/raw.csv` (gitignored): 3900 rows = 1950 contours × 2 algorith
 python plot_results.py
 ```
 
-Produces `results/summary.csv` (mean/median per algorithm × noise level × shape class), prints the median table,
-and renders `results/charts/`:
-[fig1_segments_vs_rms.png](results/charts/fig1_segments_vs_rms.png),
-[fig2_corner_recall.png](results/charts/fig2_corner_recall.png),
-[fig3_hausdorff.png](results/charts/fig3_hausdorff.png),
-[fig4_rms.png](results/charts/fig4_rms.png),
-[fig5_corner_loc_err.png](results/charts/fig5_corner_loc_err.png),
-[fig6_corner_bias.png](results/charts/fig6_corner_bias.png),
-[fig7_area.png](results/charts/fig7_area.png),
-[fig8_perimeter.png](results/charts/fig8_perimeter.png),
-[fig9_iou.png](results/charts/fig9_iou.png),
-[fig10_corner_angle.png](results/charts/fig10_corner_angle.png)
+Produces `summarized_csvs/summary.csv` (mean/median per algorithm × noise level × shape class), prints the median table,
+and renders `charts/`:
+[fig1_segments_vs_rms.png](charts/fig1_segments_vs_rms.png),
+[fig2_corner_recall.png](charts/fig2_corner_recall.png),
+[fig3_hausdorff.png](charts/fig3_hausdorff.png),
+[fig4_rms.png](charts/fig4_rms.png),
+[fig5_corner_loc_err.png](charts/fig5_corner_loc_err.png),
+[fig6_corner_bias.png](charts/fig6_corner_bias.png),
+[fig7_area.png](charts/fig7_area.png),
+[fig8_perimeter.png](charts/fig8_perimeter.png),
+[fig9_iou.png](charts/fig9_iou.png),
+[fig10_corner_angle.png](charts/fig10_corner_angle.png)
 -- each split simple vs. complex (car/plane/ship) shapes -- plus
-[fig11_walltime.png](results/charts/fig11_walltime.png) (median wall time vs noise, log scale)
-and `results/runtime_summary.csv` (mean/p95 wall time per algorithm, pooled and per image size).
+[fig11_walltime.png](charts/fig11_walltime.png) (median wall time vs noise, log scale)
+and `summarized_csvs/runtime_summary.csv` (mean/p95 wall time per algorithm, pooled and per image size).
 
 ## 4. Per-metric win/loss comparison
 
@@ -70,18 +70,18 @@ and `results/runtime_summary.csv` (mean/p95 wall time per algorithm, pooled and 
 python plot_comparison.py
 ```
 
-Produces `results/comparison_summary.csv` (one row per metric × noise level × shape class:
-`n_pairs`, `stat`, `comparison_center`, `win_count`) and renders `results/charts/`:
-[comparison_segments.png](results/charts/comparison_segments.png),
-[comparison_hausdorff.png](results/charts/comparison_hausdorff.png),
-[comparison_rms.png](results/charts/comparison_rms.png),
-[comparison_corner_recall_precision.png](results/charts/comparison_corner_recall_precision.png),
-[comparison_corner_loc_err.png](results/charts/comparison_corner_loc_err.png),
-[comparison_corner_bias.png](results/charts/comparison_corner_bias.png),
-[comparison_area.png](results/charts/comparison_area.png),
-[comparison_perimeter.png](results/charts/comparison_perimeter.png),
-[comparison_iou.png](results/charts/comparison_iou.png),
-[comparison_corner_angle.png](results/charts/comparison_corner_angle.png)
+Produces `summarized_csvs/comparison_summary.csv` (one row per metric × noise level × shape class:
+`n_pairs`, `stat`, `comparison_center`, `win_count`) and renders `charts/`:
+[comparison_segments.png](charts/comparison_segments.png),
+[comparison_hausdorff.png](charts/comparison_hausdorff.png),
+[comparison_rms.png](charts/comparison_rms.png),
+[comparison_corner_recall_precision.png](charts/comparison_corner_recall_precision.png),
+[comparison_corner_loc_err.png](charts/comparison_corner_loc_err.png),
+[comparison_corner_bias.png](charts/comparison_corner_bias.png),
+[comparison_area.png](charts/comparison_area.png),
+[comparison_perimeter.png](charts/comparison_perimeter.png),
+[comparison_iou.png](charts/comparison_iou.png),
+[comparison_corner_angle.png](charts/comparison_corner_angle.png)
 -- each split simple vs. complex (car/plane/ship) shapes; `wall_time_ms` excluded (see
 `fig11_walltime.png` above for that).
 
