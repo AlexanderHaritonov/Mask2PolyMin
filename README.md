@@ -1,5 +1,5 @@
 # Mask2PolyMin
-Package to turn noisy raster segmentation masks into clean polygons with a minimal number of segments.
+Turn noisy raster segmentation masks into clean polygons with a minimal number of segments.
 
 Useful for post‑processing bitmask segmentation outputs from models such as MaskRCNN or YOLO‑Seg, especially when regular or low‑complexity shapes are required:
 - obtaining simple geometric representations
@@ -10,12 +10,29 @@ Unlike common point‑thinning algorithms (Ramer–Douglas–Peucker, Visvalinga
 - does not shrink the area or remove corners
 - reconstructs corners with sub-pixel accuracy: vertices are intersections of least-squares fitted lines.
 
+## Quick Start
+
+```bash
+git clone https://github.com/AlexanderHaritonov/Mask2PolyMin.git
+cd Mask2PolyMin
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements-examples.txt
+python example_usage.py
+```
+
 ## Parameters
+**max_segments_count** (default `18`): Upper limit on the number of segments in the output polygon. Keeping this bound relatively tight prevents over-fitting to noise and generally improves reconstructed shape accuracy.
+
 **`tolerance`** (default `1.0`): the maximum perpendicular deviation, in input units (pixels), that a fitted line may have from the points it represents. Roughly, `tolerance ≈ epsilon / √2`, where `epsilon` is what you'd pass to Ramer–Douglas–Peucker — RDP's `epsilon` bounds the max (L∞) deviation, while `tolerance` bounds the L2 deviation.
 
 **Rule of thumb:** `tolerance ≈ max(1.0, jitter_amp)`, where `jitter_amp` how noisy the segmentation is - the standard deviation of how far the mask's boundary randomly wanders from its true edge.
 The `1.0` floor covers ordinary pixel-quantization jitter present even in a "clean" mask.
 
+**rank_split_by_max_deviation** (default `False`)
+Pass True to slightly improve simpler shapes (low segments count, enough space between opposite sides). Can damage complex shapes.
+
+**apply_local_defect_margin** (default `True`)
+Setting this to False speed up the algorithm by ~30% on complex shapes (~45% on simple) at the cost of an ~11% corner-recall regression on complex ones.
 
 ## Algorithm
 
@@ -57,7 +74,7 @@ Notes for the two common contour sources:
 
 ## Example
 
-python -m venv .venv && source .venv/bin/activate && pip install -r requirements-examples.txt && python example_usage.py
+Running `example_usage.py` (see [Quick Start](#quick-start)) walks through the following steps:
 
 - The input is a dense bitmask produced by a segmentation model.
 
@@ -76,13 +93,9 @@ python -m venv .venv && source .venv/bin/activate && pip install -r requirements
 The implementation is optimized, uses NumPy broadcasting.
 
 Benchmarked against RDP (`cv2.approxPolyDP`) on synthetic shapes across noise levels
-([performance_test/](performance_test/)): comparable on most fidelity metrics (IoU, RMS, Hausdorff). But Mask2PolyMin avoids corner-cutting bias — see [corner_bias](performance_test/charts/fig6_corner_bias.png), [corner_bias comparison](performance_test/charts/comparison_corner_bias.png) and perimeter shrinkage in [perimeter_ratio](performance_test/charts/fig8_perimeter.png), [perimeter_ratio comparison](performance_test/charts/comparison_perimeter.png).
-
-Tradeoff: Mask2PolyMin is far slower — although not dramatically slow in absolute terms: 63 ms per contour on average, even on a weak laptop (Intel i5-12450H, UHD Graphics), single-threaded — see [wall-clock time](performance_test/charts/fig11_walltime.png).
+([performance_test/](performance_test/)): comparable on most fidelity metrics (IoU, RMS, Hausdorff). But Mask2PolyMin avoids corner-cutting bias — see [corner_bias](performance_test/charts/fig6_corner_bias.png), [corner_bias comparison](performance_test/charts/comparison_corner_bias.png) and perimeter shrinkage in [perimeter_ratio](performance_test/charts/fig8_perimeter.png), [perimeter_ratio comparison](performance_test/charts/comparison_perimeter.png). Tradeoff: Mask2PolyMin is far slower — although not dramatically slow in absolute terms: 63 ms per contour on average, even on a weak laptop (Intel i5-12450H, UHD Graphics), single-threaded — see [wall-clock time](performance_test/charts/fig11_walltime.png).
 
 ## future work and ideas
-- performance tests and comparison
-- Generalize orphaning to segment interiors ?
 - explore line fitting with Theil–Sen and respectively the Median or Mean Absolute Error as stop criterion ?
 
 ## Running Tests
