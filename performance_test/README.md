@@ -64,6 +64,33 @@ and renders `results/charts/`:
 [fig11_walltime.png](results/charts/fig11_walltime.png) (median wall time vs noise, log scale)
 and `results/runtime_summary.csv` (mean/p95 wall time per algorithm, pooled and per image size).
 
+## 4. Per-metric win/loss comparison
+
+```bash
+python plot_comparison.py
+```
+
+Produces `results/comparison_summary.csv` (one row per metric × noise level × shape class:
+`n_pairs`, `stat`, `comparison_center`, `win_count`) and renders `results/charts/`:
+[comparison_segments.png](results/charts/comparison_segments.png),
+[comparison_hausdorff.png](results/charts/comparison_hausdorff.png),
+[comparison_rms.png](results/charts/comparison_rms.png),
+[comparison_corner_recall_precision.png](results/charts/comparison_corner_recall_precision.png),
+[comparison_corner_loc_err.png](results/charts/comparison_corner_loc_err.png),
+[comparison_corner_bias.png](results/charts/comparison_corner_bias.png),
+[comparison_area.png](results/charts/comparison_area.png),
+[comparison_perimeter.png](results/charts/comparison_perimeter.png),
+[comparison_iou.png](results/charts/comparison_iou.png),
+[comparison_corner_angle.png](results/charts/comparison_corner_angle.png)
+-- each split simple vs. complex (car/plane/ship) shapes; `wall_time_ms` excluded (see
+`fig11_walltime.png` above for that).
+
+Unlike section 3's aggregate-of-medians view, this pairs rdp and mask2polymin on the
+*same* noisy contour (same `contour_id`) and plots the per-contour win/loss directly: a
+line for the mean/median comparison value (mask2polymin vs. RDP, positive = mask2polymin
+better) and bars for how many contours it won, both against noise level. Design
+rationale: [Comparison_Charts_Plan.md](Comparison_Charts_Plan.md).
+
 ## Metrics
 
 Full definitions in [metrics.py](metrics.py); `n_input_points`, `n_segments`, `wall_time_ms` are
