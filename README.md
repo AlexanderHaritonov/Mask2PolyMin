@@ -16,11 +16,15 @@ Unlike common point‑thinning algorithms (Ramer–Douglas–Peucker, Visvalinga
 ## Quick Start
 
 ```bash
-git clone https://github.com/AlexanderHaritonov/Mask2PolyMin.git
-cd Mask2PolyMin
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements-examples.txt
-python example_usage.py
+pip install mask2polymin
+```
+
+```python
+import numpy as np
+from mask2polymin import FitterToPointsSequence
+
+contour = np.array([[0, 0], [10, 0], [10, 10], [0, 10]], dtype=float)  # replace with your dense (N, 2) contour, e.g. from skimage.measure.find_contours
+polygon, segments = FitterToPointsSequence(contour, is_closed=True).fit()
 ```
 
 ## Parameters
@@ -76,7 +80,15 @@ Notes for the two common contour sources:
 
 ## Example
 
-Running `example_usage.py` (see [Quick Start](#quick-start)) walks through the following steps:
+```bash
+git clone https://github.com/AlexanderHaritonov/Mask2PolyMin.git
+cd Mask2PolyMin
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements-examples.txt
+python example_usage.py
+```
+
+Running `example_usage.py` walks through the following steps:
 
 - The input is a dense bitmask produced by a segmentation model.
 
