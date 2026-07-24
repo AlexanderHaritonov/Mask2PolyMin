@@ -1,8 +1,8 @@
 # Mask2PolyMin
 
-[![PyPI](https://img.shields.io/pypi/v/mask2polymin.svg)](https://pypi.org/project/mask2polymin/)
+[![PyPI](https://img.shields.io/pypi/v/mask2polymin.svg)](https://pypi.org/project/mask2polymin/)&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;![Mask2PolyMin logo](https://raw.githubusercontent.com/AlexanderHaritonov/Mask2PolyMin/main/docs/logo.svg)
 
-## Turn noisy raster segmentation masks into clean polygons with a minimal number of segments.
+> **Turn noisy raster segmentation masks into clean polygons with a minimal number of segments.**
 
 Useful for post‑processing bitmask segmentation outputs from models such as MaskRCNN or YOLO‑Seg, especially when regular or low‑complexity shapes are required:
 - obtaining simple geometric representations
