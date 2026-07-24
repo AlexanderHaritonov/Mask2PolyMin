@@ -1,5 +1,8 @@
 # Mask2PolyMin
-Turn noisy raster segmentation masks into clean polygons with a minimal number of segments.
+
+[![PyPI](https://img.shields.io/pypi/v/mask2polymin.svg)](https://pypi.org/project/mask2polymin/)
+
+## Turn noisy raster segmentation masks into clean polygons with a minimal number of segments.
 
 Useful for post‑processing bitmask segmentation outputs from models such as MaskRCNN or YOLO‑Seg, especially when regular or low‑complexity shapes are required:
 - obtaining simple geometric representations
@@ -23,9 +26,8 @@ python example_usage.py
 ## Parameters
 **max_segments_count** (default `18`): Upper limit on the number of segments in the output polygon. Keeping this bound relatively tight prevents over-fitting to noise and generally improves reconstructed shape accuracy.
 
-**`tolerance`** (default `1.0`): the maximum perpendicular deviation, in input units (pixels), that a fitted line may have from the points it represents. Roughly, `tolerance ≈ epsilon / √2`, where `epsilon` is what you'd pass to Ramer–Douglas–Peucker — RDP's `epsilon` bounds the max (L∞) deviation, while `tolerance` bounds the L2 deviation.
-
-**Rule of thumb:** `tolerance ≈ max(1.0, jitter_amp)`, where `jitter_amp` how noisy the segmentation is - the standard deviation of how far the mask's boundary randomly wanders from its true edge.
+**`tolerance`** (default `1.0`): the maximum perpendicular deviation, in input units (pixels), that a fitted line may have from the points it represents. Roughly, `tolerance ≈ epsilon / √2`, where `epsilon` is what you'd pass to Ramer–Douglas–Peucker — RDP's `epsilon` bounds the max (L∞) deviation, while `tolerance` bounds the L2 deviation.\
+**rule of thumb:** `tolerance ≈ max(1.0, jitter_amp)`, where `jitter_amp` how noisy the segmentation is - the standard deviation of how far the mask's boundary randomly wanders from its true edge.
 The `1.0` floor covers ordinary pixel-quantization jitter present even in a "clean" mask.
 
 **rank_split_by_max_deviation** (default `False`)
