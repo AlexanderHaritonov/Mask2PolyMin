@@ -1,6 +1,6 @@
 # Mask2PolyMin
 
-[![PyPI](https://img.shields.io/pypi/v/mask2polymin.svg)](https://pypi.org/project/mask2polymin/)&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;![Mask2PolyMin logo](https://raw.githubusercontent.com/AlexanderHaritonov/Mask2PolyMin/main/docs/logo.svg)
+[![PyPI](https://img.shields.io/pypi/v/mask2polymin.svg)](https://pypi.org/project/mask2polymin/)&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;![Mask2PolyMin logo](https://raw.githubusercontent.com/AlexanderHaritonov/Mask2PolyMin/main/docs/logo.png)
 
 > **Turn noisy raster segmentation masks into clean polygons with a minimal number of segments.**
 
