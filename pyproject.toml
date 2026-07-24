@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mask2polymin"
-version = "0.1.0"
+version = "0.1.1"
 description = "Fit a polyline with a minimal number of segments to a dense contour, e.g. from bitmask segmentation outputs"
 readme = "README.md"
 license = "MIT"
