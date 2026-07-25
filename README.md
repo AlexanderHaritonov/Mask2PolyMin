@@ -4,6 +4,21 @@
 
 > **Turn noisy raster segmentation masks into clean polygons with a minimal number of segments.**
 
+## Quick Start
+
+```bash
+pip install mask2polymin
+```
+```python
+import numpy as np
+from mask2polymin import FitterToPointsSequence as Fitter
+
+contour = np.array([[0, 0], [10, 0], [10, 10], [0, 10]], dtype=float)  # replace with your dense (N, 2) contour, e.g. from skimage.measure.find_contours
+polygon, segments = Fitter(contour).fit()
+```
+
+## Motivation
+
 Useful for post‑processing bitmask segmentation outputs from models such as MaskRCNN or YOLO‑Seg, especially when regular or low‑complexity shapes are required:
 - obtaining simple geometric representations
 - to reconstruct artificial objects that consist of straight edges, sharp corners, and regular geometric properties.
@@ -13,19 +28,30 @@ Unlike common point‑thinning algorithms (Ramer–Douglas–Peucker, Visvalinga
 - does not shrink the area or remove corners
 - reconstructs corners with sub-pixel accuracy: vertices are intersections of least-squares fitted lines.
 
-## Quick Start
+## Example
 
 ```bash
-pip install mask2polymin
+git clone https://github.com/AlexanderHaritonov/Mask2PolyMin.git
+cd Mask2PolyMin
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements-examples.txt
+python example_usage.py
 ```
 
-```python
-import numpy as np
-from mask2polymin import FitterToPointsSequence
+Running `example_usage.py` walks through the following steps:
 
-contour = np.array([[0, 0], [10, 0], [10, 10], [0, 10]], dtype=float)  # replace with your dense (N, 2) contour, e.g. from skimage.measure.find_contours
-polygon, segments = FitterToPointsSequence(contour, is_closed=True).fit()
-```
+- The input is a dense bitmask produced by a segmentation model.
+
+![input bitmask](https://raw.githubusercontent.com/AlexanderHaritonov/Mask2PolyMin/main/docs/step1_bitmap.png)
+- A contour is extracted from the bitmask using skimage.measure.find_contours
+
+![extracted contour](https://raw.githubusercontent.com/AlexanderHaritonov/Mask2PolyMin/main/docs/step2_contour.png)
+
+- Mask2PolyMin fits a minimal‑segment polyline to this contour
+
+![fitted segments](https://raw.githubusercontent.com/AlexanderHaritonov/Mask2PolyMin/main/docs/step3_fitted_segments.png)
+
+- `fit()` returns `(polygon, segments)`: a closed polygon of float (sub-pixel) vertices, ready for GeoJSON/SVG/COCO export, plus the underlying fitted segments
 
 ## Parameters
 **max_segments_count** (default `18`): Upper limit on the number of segments in the output polygon. Keeping this bound relatively tight prevents over-fitting to noise and generally improves reconstructed shape accuracy.
@@ -77,31 +103,6 @@ Notes for the two common contour sources:
 
 - With OpenCV, use `cv2.findContours(..., cv2.CHAIN_APPROX_NONE)`: the common `CHAIN_APPROX_SIMPLE` pre-simplifies collinear runs, starving the least-squares fits of exactly the evidence this algorithm relies on.
 - The half-pixel difference in boundary semantics is deliberate, and the fitter does not compensate — vertices come back in the input's own convention. Account for it when comparing results from different contour extractors, or against the original mask.
-
-## Example
-
-```bash
-git clone https://github.com/AlexanderHaritonov/Mask2PolyMin.git
-cd Mask2PolyMin
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements-examples.txt
-python example_usage.py
-```
-
-Running `example_usage.py` walks through the following steps:
-
-- The input is a dense bitmask produced by a segmentation model.
-
-![input bitmask](https://raw.githubusercontent.com/AlexanderHaritonov/Mask2PolyMin/main/docs/step1_bitmap.png)
-- A contour is extracted from the bitmask using skimage.measure.find_contours
-
-![extracted contour](https://raw.githubusercontent.com/AlexanderHaritonov/Mask2PolyMin/main/docs/step2_contour.png)
-
-- Mask2PolyMin fits a minimal‑segment polyline to this contour
-
-![fitted segments](https://raw.githubusercontent.com/AlexanderHaritonov/Mask2PolyMin/main/docs/step3_fitted_segments.png)
-
-- `fit()` returns `(polygon, segments)`: a closed polygon of float (sub-pixel) vertices, ready for GeoJSON/SVG/COCO export, plus the underlying fitted segments
 
 ## Performance
 The implementation is optimized, uses NumPy broadcasting.
