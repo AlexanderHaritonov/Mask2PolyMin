@@ -6,8 +6,6 @@ from mask2polymin.line_segment_params import LineSegmentParams
 from mask2polymin.polyline import segments_to_polyline
 from mask2polymin.sequence_segment import SequenceSegment, points_count
 
-PLOT_SEGMENTS = False
-
 ''' Hard floor for a line fit; orphaning never squeezes a segment below it. '''
 MIN_SEGMENT_POINTS = 2
 
@@ -54,6 +52,9 @@ class FitterConfig:
     apply_local_defect_margin: bool = True
 
     verbose: bool = False
+
+    ''' Plot the segmentation after every split (requires matplotlib). '''
+    plot_intermediate_steps: bool = False
 
     def __post_init__(self):
         if self.max_segments_count < 1:
@@ -132,7 +133,7 @@ class FitterToPointsSequence:
 
             new_sse_per_segment = self.adjust_segmentation(segmentation_after_split, index_of_segment_to_split)
             if self.config.verbose: print(f"sse per segment: {new_sse_per_segment}")
-            if self.config.verbose and PLOT_SEGMENTS:
+            if self.config.plot_intermediate_steps:
                 from mask2polymin.plotting import plot_segments
                 plot_segments(segmentation_after_split)
 
