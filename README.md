@@ -17,6 +17,10 @@ contour = np.array([[0, 0], [10, 0], [10, 10], [0, 10]], dtype=float)  # replace
 polygon, segments = Fitter().fit(contour)
 ```
 
+## Video Walkthrough
+
+📹 [Watch `examples/example_house/example_house.py` in action](https://raw.githubusercontent.com/AlexanderHaritonov/Mask2PolyMin/main/docs/house_example_recording.mp4).
+
 ## Motivation
 
 Useful for post‑processing bitmask segmentation outputs from models such as MaskRCNN or YOLO‑Seg, especially when regular or low‑complexity shapes are required:
@@ -38,22 +42,21 @@ pip install -r requirements-examples.txt
 python example_usage.py
 ```
 
-Running `example_usage.py` walks through the following steps:
-
 - The input is a dense bitmask produced by a segmentation model.
 
-![input bitmask](https://raw.githubusercontent.com/AlexanderHaritonov/Mask2PolyMin/main/docs/step1_bitmap.png)
+<img src="https://raw.githubusercontent.com/AlexanderHaritonov/Mask2PolyMin/main/docs/step1_bitmap.png" alt="input bitmask" width="300">
+
 - A contour is extracted from the bitmask using skimage.measure.find_contours
 
-![extracted contour](https://raw.githubusercontent.com/AlexanderHaritonov/Mask2PolyMin/main/docs/step2_contour.png)
+<img src="https://raw.githubusercontent.com/AlexanderHaritonov/Mask2PolyMin/main/docs/step2_contour.png" alt="extracted contour" width="300">
 
 - Mask2PolyMin fits a minimal‑segment polyline to this contour
 
-![fitted segments](https://raw.githubusercontent.com/AlexanderHaritonov/Mask2PolyMin/main/docs/step3_fitted_segments.png)
+<img src="https://raw.githubusercontent.com/AlexanderHaritonov/Mask2PolyMin/main/docs/step3_fitted_segments.png" alt="fitted segments" width="300">
 
 - `fit()` returns `(polygon, segments)`: a closed polygon of float (sub-pixel) vertices, ready for GeoJSON/SVG/COCO export, plus the underlying fitted segments
 
-## Parameters
+## Tuning Parameters
 **max_segments_count** (default `18`): Upper limit on the number of segments in the output polygon. Keeping this bound relatively tight prevents over-fitting to noise and generally improves reconstructed shape accuracy.
 
 **`tolerance`** (default `1.0`): the maximum perpendicular deviation, in input units (pixels), that a fitted line may have from the points it represents. Roughly, `tolerance ≈ epsilon / √2`, where `epsilon` is what you'd pass to Ramer–Douglas–Peucker — RDP's `epsilon` bounds the max (L∞) deviation, while `tolerance` bounds the L2 deviation.\

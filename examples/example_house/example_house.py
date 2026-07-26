@@ -19,10 +19,10 @@ from mask2polymin import FitterToPointsSequence as Fitter, FitterConfig
 
 def run_example():
     mask = load_mask(HERE / "mask.bmp")
+    plot_grayscale(mask, title='Raw mask')
 
     # extract contour using skimage
     contour = max(measure.find_contours(mask.astype(np.uint8), level=0.5), key=len)
-
     plot_rasterized_contour(mask, contour)
 
     # approximate the contour with mask2polymin
