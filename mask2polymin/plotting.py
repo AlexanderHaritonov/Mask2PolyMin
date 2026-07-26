@@ -20,7 +20,7 @@ def show_fitted_polygon(bitmap, contour, segments, filename=None):
     if filename:
         plt.savefig(filename, dpi=150, bbox_inches='tight')
         print(f"Plot saved to '{filename}'")
-    plt.show()
+    plt.show(block=True)
 
 def plot_segments(segments: list[SequenceSegment], filename: str | None = None) -> None:
     """Display only the fitted line segments without bitmap or contour"""
@@ -38,7 +38,7 @@ def plot_segments(segments: list[SequenceSegment], filename: str | None = None) 
     if filename:
         plt.savefig(filename, dpi=150, bbox_inches='tight')
         print(f"Segments-only plot saved to '{filename}'")
-    plt.show()
+    plt.show(block=True)
 
 def _draw_segments(segments: list[SequenceSegment]) -> None:
     """Plot each segment as a distinctly colored line with a legend label."""

@@ -15,7 +15,7 @@ from PIL import Image
 from skimage import measure
 import matplotlib.pyplot as plt
 
-from mask2polymin import FitterToPointsSequence, FitterConfig
+from mask2polymin import FitterToPointsSequence as Fitter, FitterConfig
 
 def run_example():
     mask = load_mask(HERE / "mask.bmp")
@@ -23,14 +23,14 @@ def run_example():
     # extract contour using skimage
     contour = max(measure.find_contours(mask.astype(np.uint8), level=0.5), key=len)
 
-    plot_rasterized_contour(mask, contour, filename="contour.bmp")
+    plot_rasterized_contour(mask, contour)
 
     # approximate the contour with mask2polymin
-    fitter = FitterToPointsSequence(FitterConfig(plot_intermediate_steps=True))
+    fitter = Fitter(FitterConfig(plot_intermediate_steps=True))
     polygon, segments = fitter.fit(points_sequence=contour, is_closed=True)
-    plot_segments_colored(mask, contour, segments, filename="segments_colored.png")
+    plot_segments_colored(mask, contour, segments)
 
-    plot_enlarged_with_polygon(mask, contour, segments, polygon, scale=8, filename="enlarged_with_polygon.png")
+    plot_enlarged_with_polygon(mask, contour, segments, polygon, scale=8)
 
 def load_mask(path) -> np.ndarray:
     """Load mask as a boolean (H, W) array."""
@@ -52,9 +52,9 @@ def plot_grayscale(canvas: np.ndarray, title: str) -> None:
     plt.imshow(canvas, cmap='gray')
     plt.title(title)
     plt.axis('off')
-    plt.show()
+    plt.show(block=True)
 
-def plot_rasterized_contour(mask: np.ndarray, contour: np.ndarray, filename) -> None:
+def plot_rasterized_contour(mask: np.ndarray, contour: np.ndarray, filename: str = None) -> None:
     """Rasterize the contour onto a canvas, plot it, and save it as filename."""
     canvas = rasterize_contour(contour, width=mask.shape[0], height=mask.shape[1])
     plot_grayscale(canvas, title='Rasterized contour')
@@ -92,7 +92,7 @@ def plot_segments_colored(mask: np.ndarray, contour: np.ndarray, segments, filen
     if filename is not None:
         plt.savefig(HERE / filename, dpi=150, bbox_inches='tight')
         print(f"Plot saved to '{filename}'")
-    plt.show()
+    plt.show(block=True)
 
 
 def plot_enlarged_with_polygon(mask: np.ndarray, contour: np.ndarray, segments, polygon: np.ndarray,
@@ -128,7 +128,7 @@ def plot_enlarged_with_polygon(mask: np.ndarray, contour: np.ndarray, segments, 
     if filename is not None:
         plt.savefig(HERE / filename, dpi=150, bbox_inches='tight')
         print(f"Enlarged result saved to '{filename}'")
-    plt.show()
+    plt.show(block=True)
 
 
 if __name__ == "__main__":

@@ -28,7 +28,7 @@ def show_bitmap(bitmap):
     plt.tight_layout()
     plt.savefig('step1_bitmap.png', dpi=150, bbox_inches='tight')
     print("Step 1 saved to 'step1_bitmap.png'")
-    plt.show()
+    plt.show(block=True)
 
 
 # Step 3: Extract contours
@@ -60,7 +60,7 @@ def show_contour(bitmap, contour):
     plt.tight_layout()
     plt.savefig('step2_contour.png', dpi=150, bbox_inches='tight')
     print("Step 2 saved to 'step2_contour.png'")
-    plt.show()
+    plt.show(block=True)
 
 
 # Step 5: Fit polygon using FitterToPointsSequence
