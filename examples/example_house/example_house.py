@@ -8,6 +8,7 @@ End-to-end mask2polymin walkthrough on a small house mask (mask.bmp):
 Run from anywhere; all outputs are written next to this script.
 """
 from pathlib import Path
+HERE = Path(__file__).resolve().parent
 
 import numpy as np
 from PIL import Image
@@ -15,46 +16,51 @@ from skimage import measure
 import matplotlib.pyplot as plt
 
 from mask2polymin import FitterToPointsSequence, FitterConfig
-from mask2polymin.sequence_moments import subsequence
 
-HERE = Path(__file__).resolve().parent
+def run_example():
+    mask = load_mask(HERE / "mask.bmp")
 
+    # extract contour using skimage
+    contour = max(measure.find_contours(mask.astype(np.uint8), level=0.5), key=len)
 
-def load_mask() -> np.ndarray:
-    """Load mask.bmp as a boolean (H, W) array."""
-    mask = np.asarray(Image.open(HERE / "mask.bmp").convert("L")) > 0
-    print(f"Loaded mask 'mask.bmp' with shape {mask.shape}")
+    plot_rasterized_contour(mask, contour, filename="contour.bmp")
+
+    # approximate the contour with mask2polymin
+    fitter = FitterToPointsSequence(points_sequence=contour, config=FitterConfig(verbose=True))
+    polygon, segments = fitter.fit()
+    plot_segments_colored(mask, contour, segments, filename="segments_colored.png")
+
+    plot_enlarged_with_polygon(mask, contour, segments, polygon, scale=8, filename="enlarged_with_polygon.png")
+
+def load_mask(path) -> np.ndarray:
+    """Load mask as a boolean (H, W) array."""
+    mask = np.asarray(Image.open(path).convert("L")) > 0
+    print(f"Loaded mask {path} with shape {mask.shape}")
     return mask
 
 
-def extract_contour(mask: np.ndarray) -> np.ndarray:
-    """Extract the outer contour of the mask using skimage.measure.find_contours."""
-    contours = measure.find_contours(mask.astype(np.uint8), level=0.5)
-    contour = max(contours, key=len)
-    print(f"Extracted contour with {len(contour)} points")
-    return contour
-
-
-def save_contour_bmp(mask: np.ndarray, contour: np.ndarray, filename: str) -> None:
-    """Rasterize the contour points onto a blank canvas and save as a bitmap."""
-    canvas = np.zeros(mask.shape, dtype=np.uint8)
-    rows = np.clip(np.round(contour[:, 0]).astype(int), 0, mask.shape[0] - 1)
-    cols = np.clip(np.round(contour[:, 1]).astype(int), 0, mask.shape[1] - 1)
+def rasterize_contour(contour: np.ndarray, width: int, height: int) -> np.ndarray:
+    """Rasterize contour points onto a blank (height, width) canvas."""
+    canvas = np.zeros((height, width), dtype=np.uint8)
+    rows = np.clip(np.round(contour[:, 0]).astype(int), 0, height - 1)
+    cols = np.clip(np.round(contour[:, 1]).astype(int), 0, width - 1)
     canvas[rows, cols] = 255
-    Image.fromarray(canvas, mode="L").save(HERE / filename)
-    print(f"Contour saved to '{filename}'")
+    return canvas
 
+def plot_grayscale(canvas: np.ndarray, title: str) -> None:
+    plt.figure()
+    plt.imshow(canvas, cmap='gray')
+    plt.title(title)
+    plt.axis('off')
+    plt.show()
 
-def fit_polygon(contour: np.ndarray):
-    """Approximate the contour with mask2polymin, returning (polygon, segments)."""
-    fitter = FitterToPointsSequence(
-        points_sequence=contour,
-        is_closed=True,
-        config=FitterConfig(tolerance=1.0, verbose=False),
-    )
-    polygon, segments = fitter.fit()
-    print(f"Fitted polygon with {len(polygon) - 1} vertices from {len(segments)} segments")
-    return polygon, segments
+def plot_rasterized_contour(mask: np.ndarray, contour: np.ndarray, filename) -> None:
+    """Rasterize the contour onto a canvas, plot it, and save it as filename."""
+    canvas = rasterize_contour(contour, width=mask.shape[0], height=mask.shape[1])
+    plot_grayscale(canvas, title='Rasterized contour')
+    if filename is not None:
+        Image.fromarray(canvas, mode="L").save(HERE / filename)
+        print(f"Contour saved to '{filename}'")
 
 
 def segment_colors(n: int) -> np.ndarray:
@@ -63,8 +69,11 @@ def segment_colors(n: int) -> np.ndarray:
     return plt.cm.viridis(np.linspace(0, 1, n))
 
 
-def save_segments_colored(mask: np.ndarray, contour: np.ndarray, segments, filename: str) -> None:
+def plot_segments_colored(mask: np.ndarray, contour: np.ndarray, segments, filename: str = None) -> None:
     """Visualize the fitted segments, each in its own (red-free) color."""
+
+    from mask2polymin.sequence_moments import subsequence
+
     plt.figure(figsize=(10, 8))
     plt.imshow(mask, cmap='gray', alpha=0.3)
     plt.plot(contour[:, 1], contour[:, 0], 'k.', alpha=0.2, markersize=3,
@@ -80,14 +89,18 @@ def save_segments_colored(mask: np.ndarray, contour: np.ndarray, segments, filen
     plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left', fontsize=10)
     plt.axis('off')
     plt.tight_layout()
-    plt.savefig(HERE / filename, dpi=150, bbox_inches='tight')
-    print(f"Plot saved to '{filename}'")
+    if filename is not None:
+        plt.savefig(HERE / filename, dpi=150, bbox_inches='tight')
+        print(f"Plot saved to '{filename}'")
     plt.show()
 
 
-def save_enlarged_with_polygon(mask: np.ndarray, contour: np.ndarray, segments, polygon: np.ndarray,
-                                scale: int, filename: str) -> None:
+def plot_enlarged_with_polygon(mask: np.ndarray, contour: np.ndarray, segments, polygon: np.ndarray,
+                                scale: int, filename: str = None) -> None:
     """Enlarge the segments_colored view `scale`x and draw the fitted polygon (scaled to match) on top."""
+
+    from mask2polymin.sequence_moments import subsequence
+
     enlarged = np.kron(mask, np.ones((scale, scale), dtype=mask.dtype))
     # shift by half an enlarged pixel (right, down) so points land on pixel centers instead of corners
     offset = scale / 2
@@ -112,19 +125,11 @@ def save_enlarged_with_polygon(mask: np.ndarray, contour: np.ndarray, segments, 
     plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left', fontsize=10)
     plt.axis('off')
     plt.tight_layout()
-    plt.savefig(HERE / filename, dpi=150, bbox_inches='tight')
-    print(f"Enlarged result saved to '{filename}'")
+    if filename is not None:
+        plt.savefig(HERE / filename, dpi=150, bbox_inches='tight')
+        print(f"Enlarged result saved to '{filename}'")
     plt.show()
 
 
 if __name__ == "__main__":
-    mask = load_mask()
-
-    contour = extract_contour(mask)
-    save_contour_bmp(mask, contour, "contour.bmp")
-
-    polygon, segments = fit_polygon(contour)
-    save_segments_colored(mask, contour, segments, filename="segments_colored.png")
-
-    save_enlarged_with_polygon(mask, contour, segments, polygon, scale=8,
-                                filename="enlarged_with_polygon.png")
+    run_example()
