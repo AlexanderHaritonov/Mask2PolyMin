@@ -18,7 +18,8 @@ def test_split_segment_regular_case():
     # (e.g. +50 here flips the argmax to index 9) -- +10 keeps a clear ~3x margin instead.
     seq = np.array([[i, i] for i in range(10)], dtype=float)
     seq[6] = [6, 16]
-    fitter = FitterToPointsSequence(seq)
+    fitter = FitterToPointsSequence()
+    fitter._prepare(seq)
     segment = make_segment(seq, 0, 9)
     segments = [segment]
 
@@ -33,7 +34,8 @@ def test_split_segment_regular_case():
 def test_split_segment_segment_ends_on_last_index():
     seq = np.array([[i, i] for i in range(8)], dtype=float)
     seq[5] = [5, 8]  # outlier at local offset 3 within segment [2..7]
-    fitter = FitterToPointsSequence(seq)
+    fitter = FitterToPointsSequence()
+    fitter._prepare(seq)
     segment = make_segment(seq, 2, 7)  # ends at last index
     segments = [segment]
 
@@ -47,7 +49,8 @@ def test_split_segment_segment_ends_on_last_index():
 def test_split_segment_first_half_ends_on_last_index():
     seq = np.array([[i, i] for i in range(6)], dtype=float)
     seq[2] = [2, 7]  # outlier at local offset 2
-    fitter = FitterToPointsSequence(seq)
+    fitter = FitterToPointsSequence()
+    fitter._prepare(seq)
     segment = make_segment(seq, 0, 5)
     segments = [segment]
 
@@ -63,7 +66,8 @@ def test_split_segment_clamps_pivot_near_segment_start():
     # point, so MIN_SEGMENT_POINTS clamps the pivot forward instead.
     seq = np.array([[i, i] for i in range(10)], dtype=float)
     seq[0] = [0, 5]
-    fitter = FitterToPointsSequence(seq)
+    fitter = FitterToPointsSequence()
+    fitter._prepare(seq)
     segment = make_segment(seq, 0, 9)
     segments = [segment]
 
@@ -78,7 +82,8 @@ def test_split_segment_clamps_pivot_near_segment_end():
     # point, so MIN_SEGMENT_POINTS clamps the pivot backward instead.
     seq = np.array([[i, i] for i in range(10)], dtype=float)
     seq[9] = [9, 12]
-    fitter = FitterToPointsSequence(seq)
+    fitter = FitterToPointsSequence()
+    fitter._prepare(seq)
     segment = make_segment(seq, 0, 9)
     segments = [segment]
 
@@ -90,7 +95,8 @@ def test_split_segment_clamps_pivot_near_segment_end():
 
 def test_split_segment_second_half_starts_at_index_0():
     seq = np.array([[i, i] for i in range(6)])
-    fitter = FitterToPointsSequence(seq, is_closed=True)
+    fitter = FitterToPointsSequence()
+    fitter._prepare(seq, is_closed=True)
     # Closed segment: first_index=4, last_index=1
     segment = make_segment(seq, 4, 1)
     segments = [segment]
@@ -101,7 +107,8 @@ def test_split_segment_second_half_starts_at_index_0():
 
 def test_split_segment_starts_on_last_index():
     seq = np.array([[i, i] for i in range(6)])
-    fitter = FitterToPointsSequence(seq, is_closed=True)
+    fitter = FitterToPointsSequence()
+    fitter._prepare(seq, is_closed=True)
     # Closed segment starting at last index
     segment = make_segment(seq, 5, 2)
     segments = [segment]

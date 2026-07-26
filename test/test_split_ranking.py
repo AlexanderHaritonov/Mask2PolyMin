@@ -43,9 +43,10 @@ def test_rank_split_by_max_deviation_flips_which_segment_wins():
     assert mean_loss_a > mean_loss_b
     assert max_dev_b > max_dev_a
 
-    default_fitter = FitterToPointsSequence(whole_sequence)
+    default_fitter = FitterToPointsSequence()
+    default_fitter._prepare(whole_sequence)
     assert default_fitter.choose_segment_index_for_split(segments) == 0  # mean loss: A wins
 
-    max_dev_fitter = FitterToPointsSequence(
-        whole_sequence, config=FitterConfig(rank_split_by_max_deviation=True))
+    max_dev_fitter = FitterToPointsSequence(config=FitterConfig(rank_split_by_max_deviation=True))
+    max_dev_fitter._prepare(whole_sequence)
     assert max_dev_fitter.choose_segment_index_for_split(segments) == 1  # max deviation: B wins

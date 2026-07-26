@@ -26,8 +26,8 @@ def run_example():
     plot_rasterized_contour(mask, contour, filename="contour.bmp")
 
     # approximate the contour with mask2polymin
-    fitter = FitterToPointsSequence(points_sequence=contour, config=FitterConfig(plot_intermediate_steps=True))
-    polygon, segments = fitter.fit()
+    fitter = FitterToPointsSequence(FitterConfig(plot_intermediate_steps=True))
+    polygon, segments = fitter.fit(points_sequence=contour, is_closed=True)
     plot_segments_colored(mask, contour, segments, filename="segments_colored.png")
 
     plot_enlarged_with_polygon(mask, contour, segments, polygon, scale=8, filename="enlarged_with_polygon.png")

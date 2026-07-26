@@ -68,11 +68,24 @@ class FitterConfig:
         return self.tolerance ** 2
 
 class FitterToPointsSequence:
-    def __init__(self,
-                 points_sequence: np.ndarray,
-                 is_closed: bool = False,
-                 config: FitterConfig | None = None):
+    def __init__(self, config: FitterConfig | None = None):
+        self.config = config or FitterConfig()
 
+    def fit(self, points_sequence: np.ndarray, is_closed: bool = False) -> tuple[np.ndarray, list[SequenceSegment]]:
+        self._prepare(points_sequence, is_closed)
+
+        segments_sequence = self._fit()
+        segments = self._merge_collinear_segments(segments_sequence)
+
+        # all fits so far skipped the O(n) endpoint-extents pass (start/end points sit at the centroid);
+        # one exact refit per final segment fills in the real extents for the polyline and for callers
+        for segment in segments:
+            refit_segment(self._moments, segment, with_endpoints=True)
+        polygon = segments_to_polyline(segments, is_closed=self.is_closed, tolerance=self.config.tolerance)
+        return polygon, segments
+
+    def _prepare(self, points_sequence: np.ndarray, is_closed: bool = False) -> None:
+        """Validate and normalize points_sequence, then set up whole_sequence/is_closed/_moments for fitting."""
         # no-op for float64 (N, 2) ndarray input; coerces lists and integer contours once, up front
         points_sequence = np.asarray(points_sequence, dtype=np.float64)
         if points_sequence.ndim == 3 and points_sequence.shape[1] == 1:
@@ -90,19 +103,7 @@ class FitterToPointsSequence:
         if len(self.whole_sequence) < 2:
             raise ValueError(f"points_sequence must contain at least 2 points (excluding the closing duplicate), got {len(self.whole_sequence)}")
         self.is_closed = is_closed
-        self.config = config or FitterConfig()
-
         self._moments = SequenceMoments(self.whole_sequence)
-
-    def fit(self) -> tuple[np.ndarray, list[SequenceSegment]]:
-        segments_sequence = self._fit()
-        segments = self._merge_collinear_segments(segments_sequence)
-        # all fits so far skipped the O(n) endpoint-extents pass (start/end points sit at the centroid);
-        # one exact refit per final segment fills in the real extents for the polyline and for callers
-        for segment in segments:
-            refit_segment(self._moments, segment, with_endpoints=True)
-        polygon = segments_to_polyline(segments, is_closed=self.is_closed, tolerance=self.config.tolerance)
-        return polygon, segments
 
     def _fit(self) -> list[SequenceSegment]:
         segment_params: LineSegmentParams = fit_range(self._moments, 0, len(self.whole_sequence) - 1, with_endpoints=False)

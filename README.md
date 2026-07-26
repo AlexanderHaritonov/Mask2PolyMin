@@ -14,7 +14,7 @@ import numpy as np
 from mask2polymin import FitterToPointsSequence as Fitter
 
 contour = np.array([[0, 0], [10, 0], [10, 10], [0, 10]], dtype=float)  # replace with your dense (N, 2) contour, e.g. from skimage.measure.find_contours
-polygon, segments = Fitter(contour).fit()
+polygon, segments = Fitter().fit(contour)
 ```
 
 ## Motivation
@@ -89,7 +89,7 @@ Mask2PolyMin therefore may leave up to 2 points at each junction *orphaned* — 
 
 - Input **Dense contours, not sparse polygons**!
 - **Axis order doesn't matter** — `(row, col)` from skimage and `(x, y)` from OpenCV both work; output vertices keep the input's order.
-- **Closed contours**: pass `is_closed=True`; a duplicated closing point (skimage-style) is detected and stripped automatically.
+- **Closed contours**: pass `is_closed=True` to `fit()`; a duplicated closing point (skimage-style) is detected and stripped automatically.
 
 Notes for the two common contour sources:
 

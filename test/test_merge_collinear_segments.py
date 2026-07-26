@@ -16,7 +16,8 @@ def make_segments(fitter, index_ranges):
 
 def test_merges_two_collinear_segments():
     seq = np.array([[i, 0] for i in range(10)], dtype=float)
-    fitter = FitterToPointsSequence(seq)
+    fitter = FitterToPointsSequence()
+    fitter._prepare(seq)
     segments = make_segments(fitter, [(0, 4), (5, 9)])
 
     result = fitter._merge_collinear_segments(segments)
@@ -29,7 +30,8 @@ def test_merges_two_collinear_segments():
 
 def test_merges_chain_of_three_collinear_segments():
     seq = np.array([[i, 0] for i in range(12)], dtype=float)
-    fitter = FitterToPointsSequence(seq)
+    fitter = FitterToPointsSequence()
+    fitter._prepare(seq)
     segments = make_segments(fitter, [(0, 3), (4, 7), (8, 11)])
 
     result = fitter._merge_collinear_segments(segments)
@@ -44,7 +46,8 @@ def test_corner_segments_stay_separate():
     horizontal = [[x, 0] for x in range(5)]
     vertical = [[4, y] for y in range(1, 6)]
     seq = np.array(horizontal + vertical, dtype=float)
-    fitter = FitterToPointsSequence(seq)
+    fitter = FitterToPointsSequence()
+    fitter._prepare(seq)
     segments = make_segments(fitter, [(0, 4), (5, 9)])
 
     result = fitter._merge_collinear_segments(segments)
@@ -59,7 +62,8 @@ def test_parallel_but_offset_segments_stay_separate():
     lower = [[x, 0] for x in range(4)]
     upper = [[x, 5] for x in range(4, 8)]
     seq = np.array(lower + upper, dtype=float)
-    fitter = FitterToPointsSequence(seq)
+    fitter = FitterToPointsSequence()
+    fitter._prepare(seq)
     segments = make_segments(fitter, [(0, 3), (4, 7)])
 
     result = fitter._merge_collinear_segments(segments)
@@ -78,7 +82,8 @@ def test_closed_wraparound_merge():
     left = [[0, y] for y in range(5, 0, -1)]       # indices 16..20
     bottom_left = [[x, 0] for x in range(0, 3)]    # indices 21..23
     seq = np.array(bottom_right + right + top + left + bottom_left, dtype=float)
-    fitter = FitterToPointsSequence(seq, is_closed=True)
+    fitter = FitterToPointsSequence()
+    fitter._prepare(seq, is_closed=True)
     segments = make_segments(fitter, [(0, 3), (4, 9), (10, 15), (16, 20), (21, 23)])
 
     result = fitter._merge_collinear_segments(segments)
@@ -104,7 +109,8 @@ def test_wraparound_merge_enables_forward_neighbour_merge():
     c = [[13, y] for y in range(1, 6)]               # indices 13..17, vertical: never merges
     d = [[x, 0] for x in range(-10, 0)]              # indices 18..27, wraps around to a
     seq = np.array(a + b + c + d, dtype=float)
-    fitter = FitterToPointsSequence(seq, is_closed=True)
+    fitter = FitterToPointsSequence()
+    fitter._prepare(seq, is_closed=True)
     segments = make_segments(fitter, [(0, 1), (2, 12), (13, 17), (18, 27)])
 
     # fixture premise: the A∪B combined fit alone leaves the leverage point beyond tolerance
@@ -125,7 +131,8 @@ def test_short_stub_with_noisy_direction_still_merges():
     seq = np.array([[0, 0], [1, 0], [2, 0], [3, 0],
                     [4, 0.2], [5, -0.2],
                     [6, 0], [7, 0], [8, 0], [9, 0]], dtype=float)
-    fitter = FitterToPointsSequence(seq)
+    fitter = FitterToPointsSequence()
+    fitter._prepare(seq)
     segments = make_segments(fitter, [(0, 3), (4, 5), (6, 9)])
     stub_direction = segments[1].line_segment_params.direction
     assert abs(float(np.dot(stub_direction, np.array([1.0, 0.0])))) < 0.98  # pre-check would reject
@@ -144,7 +151,8 @@ def test_open_sequence_never_merges_across_the_ends():
     middle = [[3, y] for y in range(1, 5)]
     last = [[x, 4] for x in range(4, 8)]
     seq = np.array(first + middle + last, dtype=float)
-    fitter = FitterToPointsSequence(seq)
+    fitter = FitterToPointsSequence()
+    fitter._prepare(seq)
     segments = make_segments(fitter, [(0, 3), (4, 7), (8, 11)])
 
     result = fitter._merge_collinear_segments(segments)

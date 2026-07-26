@@ -42,8 +42,8 @@ def test_noisy_rectangle_fits_to_its_four_corners(seed):
     pts, true_corners = noisy_rectangle_contour(rng, width, height, angle, center, sigma=0.1)
 
     config = FitterConfig(tolerance=1.0)
-    fitter = FitterToPointsSequence(pts, is_closed=True, config=config)
-    polygon, segments = fitter.fit()
+    fitter = FitterToPointsSequence(config=config)
+    polygon, segments = fitter.fit(pts, is_closed=True)
 
     assert len(segments) == 4, f"w={width} h={height} angle={np.degrees(angle):.1f}: expected 4 segments, got {len(segments)}"
     vertices = polygon[:-1]

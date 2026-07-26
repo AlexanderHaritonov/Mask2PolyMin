@@ -28,7 +28,8 @@ def assert_equivalent_fits(fitter, first, last):
 def test_open_polyline_random_ranges():
     rng = np.random.default_rng(7)
     points = np.cumsum(rng.normal(0.5, 0.4, size=(60, 2)), axis=0) + 100
-    fitter = FitterToPointsSequence(points)
+    fitter = FitterToPointsSequence()
+    fitter._prepare(points)
     for _ in range(50):
         first = int(rng.integers(0, len(points) - 1))
         last = int(rng.integers(first + 1, len(points)))
@@ -40,7 +41,8 @@ def test_closed_contour_wrapping_ranges():
     rng = np.random.default_rng(11)
     points = np.stack([50 + 20 * np.cos(theta), 50 + 20 * np.sin(theta)], axis=1)
     points += rng.normal(0, 0.2, points.shape)
-    fitter = FitterToPointsSequence(points, is_closed=True)
+    fitter = FitterToPointsSequence()
+    fitter._prepare(points, is_closed=True)
     n = len(fitter.whole_sequence)
     for first, last in [(35, 5), (n - 1, 0), (30, 29 - 1), (20, 3)]:
         assert_equivalent_fits(fitter, first, last)
@@ -48,27 +50,31 @@ def test_closed_contour_wrapping_ranges():
 
 def test_exact_line_zero_loss():
     points = np.array([[x, 2.0 * x + 1] for x in range(10)], dtype=np.float64)
-    fitter = FitterToPointsSequence(points)
+    fitter = FitterToPointsSequence()
+    fitter._prepare(points)
     assert_equivalent_fits(fitter, 2, 8)
     assert fitter_fit_range(fitter, 2, 8).loss == pytest.approx(0.0, abs=1e-9)
 
 
 def test_two_point_range():
     points = np.array([[0, 0], [1, 0], [2, 1], [3, 3]], dtype=np.float64)
-    fitter = FitterToPointsSequence(points)
+    fitter = FitterToPointsSequence()
+    fitter._prepare(points)
     assert_equivalent_fits(fitter, 1, 2)
 
 
 def test_single_point_range_raises():
     points = np.array([[0, 0], [1, 0], [2, 1]], dtype=np.float64)
-    fitter = FitterToPointsSequence(points)
+    fitter = FitterToPointsSequence()
+    fitter._prepare(points)
     with pytest.raises(ValueError):
         fitter_fit_range(fitter, 1, 1)
 
 
 def test_identical_points_degenerate():
     points = np.array([[5, 5]] * 4 + [[6, 7], [7, 9]], dtype=np.float64)
-    fitter = FitterToPointsSequence(points)
+    fitter = FitterToPointsSequence()
+    fitter._prepare(points)
     expected = fit_line_segment(subsequence(fitter.whole_sequence, 0, 3))
     actual = fitter_fit_range(fitter, 0, 3)
     np.testing.assert_allclose(actual.start_point, expected.start_point, atol=1e-9)
@@ -79,7 +85,8 @@ def test_identical_points_degenerate():
 def test_without_endpoints_same_line_cheaper_params():
     rng = np.random.default_rng(5)
     points = np.cumsum(rng.normal(0.5, 0.4, size=(40, 2)), axis=0)
-    fitter = FitterToPointsSequence(points)
+    fitter = FitterToPointsSequence()
+    fitter._prepare(points)
     full = fit_range(fitter._moments, 4, 30, with_endpoints=True)
     slim = fit_range(fitter._moments, 4, 30, with_endpoints=False)
 

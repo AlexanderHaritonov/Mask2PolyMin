@@ -31,7 +31,8 @@ def test_corner_straddling_point_is_orphaned():
     seg1 = SequenceSegment(points, 0, 3, make_params([0, 0], [3, 0]))
     seg2 = SequenceSegment(points, 4, 8, make_params([6, 3], [6, 6]))
 
-    fitter = FitterToPointsSequence(points)
+    fitter = FitterToPointsSequence()
+    fitter._prepare(points)
     last1, first2, _ = fitter.best_consecutive_segments_separation(seg1, seg2)
 
     # orphaning saves min(2.25, 2.25) = 2.25 at penalty 1.0 => point 4 orphaned
@@ -48,7 +49,8 @@ def test_subtolerance_corner_point_is_not_orphaned():
     seg1 = SequenceSegment(points, 0, 3, make_params([0, 0], [3, 0]))
     seg2 = SequenceSegment(points, 4, 8, make_params([5, 2], [5, 5]))
 
-    fitter = FitterToPointsSequence(points)
+    fitter = FitterToPointsSequence()
+    fitter._prepare(points)
     last1, first2, _ = fitter.best_consecutive_segments_separation(seg1, seg2)
 
     # adopting into seg1 costs 0.25 < penalty 1.0 => no orphan
@@ -66,7 +68,8 @@ def test_min_segment_guard_blocks_orphaning():
     seg1 = SequenceSegment(points, 0, 1, make_params([0, 0], [1, 0]))   # line y=0
     seg2 = SequenceSegment(points, 2, 4, make_params([3, 3], [3, 5]))   # line x=3
 
-    fitter = FitterToPointsSequence(points)
+    fitter = FitterToPointsSequence()
+    fitter._prepare(points)
     last1, first2, _ = fitter.best_consecutive_segments_separation(seg1, seg2)
 
     assert first2 == last1 + 1  # no orphan despite point 1 being >tolerance from both lines
@@ -89,7 +92,8 @@ def test_two_point_segment_corner_point_is_orphaned():
     seg1 = SequenceSegment(points, 0, 1, make_params([0, 0], [1, 0]))
     seg2 = SequenceSegment(points, 2, 6, make_params([3, 2], [3, 5]))
 
-    fitter = FitterToPointsSequence(points)
+    fitter = FitterToPointsSequence()
+    fitter._prepare(points)
     last1, first2, _ = fitter.best_consecutive_segments_separation(seg1, seg2)
 
     # orphaning saves min(1.2², 1.5²) = 1.44 at penalty 1.0 => point 2 orphaned
@@ -123,8 +127,8 @@ def vertex_errors(segments):
 
 def test_displaced_corners_end_to_end():
     pts = square_contour(corner_displacement=1.5)
-    fitter = FitterToPointsSequence(pts, is_closed=True, config=FitterConfig(tolerance=1.0))
-    _, segments = fitter.fit()
+    fitter = FitterToPointsSequence(config=FitterConfig(tolerance=1.0))
+    _, segments = fitter.fit(pts, is_closed=True)
 
     assert len(segments) == 4
     gaps = junction_gaps(segments, len(fitter.whole_sequence))
@@ -135,8 +139,8 @@ def test_displaced_corners_end_to_end():
 
 def test_displaced_corners_all_orphaned_strict():
     pts = square_contour(corner_displacement=1.5)
-    fitter = FitterToPointsSequence(pts, is_closed=True, config=FitterConfig(tolerance=1.0))
-    _, segments = fitter.fit()
+    fitter = FitterToPointsSequence(config=FitterConfig(tolerance=1.0))
+    _, segments = fitter.fit(pts, is_closed=True)
 
     assert len(segments) == 4
     gaps = junction_gaps(segments, len(fitter.whole_sequence))
@@ -148,8 +152,8 @@ def test_displaced_corners_all_orphaned_strict():
 
 def test_clean_square_has_no_orphans():
     pts = square_contour(corner_displacement=0.0)
-    fitter = FitterToPointsSequence(pts, is_closed=True, config=FitterConfig(tolerance=1.0))
-    _, segments = fitter.fit()
+    fitter = FitterToPointsSequence(config=FitterConfig(tolerance=1.0))
+    _, segments = fitter.fit(pts, is_closed=True)
 
     assert len(segments) == 4
     assert all(g == 0 for g in junction_gaps(segments, len(fitter.whole_sequence)))

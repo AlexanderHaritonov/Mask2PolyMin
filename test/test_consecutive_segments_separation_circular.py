@@ -22,7 +22,9 @@ def fitter():
         [0, 0], [1, 0], [2, 0], [3, 0],   # indices 0..3
         [3, 1], [2, 1], [1, 1], [0, 1]    # indices 4..7
     ], dtype=np.float64)
-    return FitterToPointsSequence(points, is_closed=True)
+    fitter = FitterToPointsSequence()
+    fitter._prepare(points, is_closed=True)
+    return fitter
 
 def build_segments(fitter, seg1_first, seg1_last, seg2_first, seg2_last):
     seq = fitter.whole_sequence

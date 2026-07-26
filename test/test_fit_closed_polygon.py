@@ -14,12 +14,10 @@ def test_fit_closed_polygon_four_segments():
     ], dtype=np.float64)
 
     fitter = FitterToPointsSequence(
-        points,
-        is_closed=True,
         config=FitterConfig(max_segments_count=10, tolerance=0.001, verbose=False)
     )
 
-    _polygon, segments = fitter.fit()
+    _polygon, segments = fitter.fit(points, is_closed=True)
     print_segments_info(segments)
     plot_segments(segments)
 
@@ -65,12 +63,10 @@ def test_fit_closed_polygon_four_segments_rotated_45deg():
         points[i] = [x_rotated + center[0], y_rotated + center[1]]
 
     fitter = FitterToPointsSequence(
-        points,
-        is_closed=True,
         config=FitterConfig(max_segments_count=10, tolerance=0.001, verbose=False)
     )
 
-    _polygon, segments = fitter.fit()
+    _polygon, segments = fitter.fit(points, is_closed=True)
     print_segments_info(segments)
     plot_segments(segments)
 

@@ -30,7 +30,7 @@ def mask2polymin(contour: np.ndarray, tolerance: float) -> np.ndarray:
     # Mask2PolyMin fitter. Returns closed polyline of fitted-line intersections.
 
     config = FitterConfig(tolerance=float(tolerance))
-    polygon, _ = FitterToPointsSequence(contour, is_closed=True, config=config).fit()
+    polygon, _ = FitterToPointsSequence(config=config).fit(contour, is_closed=True)
     return polygon
 
 

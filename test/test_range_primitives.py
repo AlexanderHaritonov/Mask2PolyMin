@@ -29,7 +29,8 @@ def test_points_count_linear_wrap_and_single_point():
 
 
 def test_range_moments_count_agrees_with_points_count():
-    fitter = FitterToPointsSequence(POINTS)
+    fitter = FitterToPointsSequence()
+    fitter._prepare(POINTS)
     for first, last in [(2, 5), (6, 1), (3, 3), (4, 3), (0, 7)]:
         _, count = range_moments(fitter._moments, first, last)
         assert count == points_count(N, first, last)

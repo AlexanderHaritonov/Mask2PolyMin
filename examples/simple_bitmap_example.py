@@ -79,8 +79,6 @@ def fit_polygon(contour, verbose=False):
     start_time = time.perf_counter()
 
     fitter = FitterToPointsSequence(
-        points_sequence=contour,
-        is_closed=True,
         config=FitterConfig(
             max_segments_count=15,
             tolerance=0.2,
@@ -89,7 +87,7 @@ def fit_polygon(contour, verbose=False):
     )
 
     # Fit line segments to the contour
-    _polygon, segments = fitter.fit()
+    _polygon, segments = fitter.fit(contour, is_closed=True)
 
     end_time = time.perf_counter()
     elapsed_time = end_time - start_time
