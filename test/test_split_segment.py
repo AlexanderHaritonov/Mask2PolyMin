@@ -23,7 +23,7 @@ def test_split_segment_regular_case():
     segment = make_segment(seq, 0, 9)
     segments = [segment]
 
-    result = fitter.split_segment(segments, 0)
+    result = fitter._split_segment(segments, 0)
     # Pivot lands exactly on the outlier (index 6), well clear of the min-2-points clamp
     assert len(result) == 2
     assert result[0].first_index == 0
@@ -39,7 +39,7 @@ def test_split_segment_segment_ends_on_last_index():
     segment = make_segment(seq, 2, 7)  # ends at last index
     segments = [segment]
 
-    result = fitter.split_segment(segments, 0)
+    result = fitter._split_segment(segments, 0)
     # Pivot lands on the outlier (index 5)
     assert result[0].first_index == 2
     assert result[0].last_index == 5
@@ -54,7 +54,7 @@ def test_split_segment_first_half_ends_on_last_index():
     segment = make_segment(seq, 0, 5)
     segments = [segment]
 
-    result = fitter.split_segment(segments, 0)
+    result = fitter._split_segment(segments, 0)
     # Pivot lands on the outlier (index 2)
     assert result[0].first_index == 0
     assert result[0].last_index == 2
@@ -71,7 +71,7 @@ def test_split_segment_clamps_pivot_near_segment_start():
     segment = make_segment(seq, 0, 9)
     segments = [segment]
 
-    result = fitter.split_segment(segments, 0)
+    result = fitter._split_segment(segments, 0)
     assert result[0].first_index == 0
     assert result[0].last_index == 1
     assert result[1].first_index == 2
@@ -87,7 +87,7 @@ def test_split_segment_clamps_pivot_near_segment_end():
     segment = make_segment(seq, 0, 9)
     segments = [segment]
 
-    result = fitter.split_segment(segments, 0)
+    result = fitter._split_segment(segments, 0)
     assert result[0].first_index == 0
     assert result[0].last_index == 7
     assert result[1].first_index == 8
@@ -101,7 +101,7 @@ def test_split_segment_second_half_starts_at_index_0():
     segment = make_segment(seq, 4, 1)
     segments = [segment]
 
-    result = fitter.split_segment(segments, 0)
+    result = fitter._split_segment(segments, 0)
     # Ensure one of the new segments starts at 0
     assert any(seg.first_index == 0 for seg in result)
 
@@ -113,7 +113,7 @@ def test_split_segment_starts_on_last_index():
     segment = make_segment(seq, 5, 2)
     segments = [segment]
 
-    result = fitter.split_segment(segments, 0)
+    result = fitter._split_segment(segments, 0)
     # Ensure first segment starts at 5
     assert result[0].first_index == 5
 

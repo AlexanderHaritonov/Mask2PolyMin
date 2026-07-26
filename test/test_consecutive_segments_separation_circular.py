@@ -49,47 +49,47 @@ def assert_valid_separation(fitter, last1, first2):
 def test_seg1_end_in_first_half(fitter):
     # seg1 covers indices 4..6, seg2 covers 7..3
     seg1, seg2 = build_segments(fitter, 4, 6, 7, 3)
-    last1, first2, _ = fitter.best_consecutive_segments_separation(seg1, seg2)
+    last1, first2, _ = fitter._best_consecutive_segments_separation(seg1, seg2)
     assert_valid_separation(fitter, last1, first2)
 
 def test_seg1_end_on_left_limit(fitter):
     # seg1 covers indices 4..7, seg2 covers 0..3
     seg1, seg2 = build_segments(fitter, 4, 7, 0, 3)
-    last1, first2, _ = fitter.best_consecutive_segments_separation(seg1, seg2)
+    last1, first2, _ = fitter._best_consecutive_segments_separation(seg1, seg2)
     assert_valid_separation(fitter, last1, first2)
 
 def test_seg1_end_in_second_half(fitter):
     # seg1 covers indices 5..7, seg2 covers 0..4
     seg1, seg2 = build_segments(fitter, 5, 7, 0, 4)
-    last1, first2, _ = fitter.best_consecutive_segments_separation(seg1, seg2)
+    last1, first2, _ = fitter._best_consecutive_segments_separation(seg1, seg2)
     assert_valid_separation(fitter, last1, first2)
 
 def test_seg1_end_exactly_at_end(fitter):
     # seg1 covers indices 6..7, seg2 covers 0..5
     seg1, seg2 = build_segments(fitter, 6, 7, 0, 5)
-    last1, first2, _ = fitter.best_consecutive_segments_separation(seg1, seg2)
+    last1, first2, _ = fitter._best_consecutive_segments_separation(seg1, seg2)
     assert_valid_separation(fitter, last1, first2)
 
 def test_seg2_end_in_first_half(fitter):
     # seg2 covers indices 0..2, seg1 covers 3..7
     seg1, seg2 = build_segments(fitter, 3, 7, 0, 2)
-    last1, first2, _ = fitter.best_consecutive_segments_separation(seg1, seg2)
+    last1, first2, _ = fitter._best_consecutive_segments_separation(seg1, seg2)
     assert_valid_separation(fitter, last1, first2)
 
 def test_seg2_end_on_left_limit(fitter):
     # seg2 covers indices 0..3, seg1 covers 4..7
     seg1, seg2 = build_segments(fitter, 4, 7, 0, 3)
-    last1, first2, _ = fitter.best_consecutive_segments_separation(seg1, seg2)
+    last1, first2, _ = fitter._best_consecutive_segments_separation(seg1, seg2)
     assert_valid_separation(fitter, last1, first2)
 
 def test_seg2_end_in_second_half(fitter):
     # seg2 covers indices 0..4, seg1 covers 5..7
     seg1, seg2 = build_segments(fitter, 5, 7, 0, 4)
-    last1, first2, _ = fitter.best_consecutive_segments_separation(seg1, seg2)
+    last1, first2, _ = fitter._best_consecutive_segments_separation(seg1, seg2)
     assert_valid_separation(fitter, last1, first2)
 
 def test_seg2_end_exactly_at_end(fitter):
     # seg2 covers indices 0..5, seg1 covers 6..7
     seg1, seg2 = build_segments(fitter, 6, 7, 0, 5)
-    last1, first2, _ = fitter.best_consecutive_segments_separation(seg1, seg2)
+    last1, first2, _ = fitter._best_consecutive_segments_separation(seg1, seg2)
     assert_valid_separation(fitter, last1, first2)

@@ -33,7 +33,7 @@ def test_corner_straddling_point_is_orphaned():
 
     fitter = FitterToPointsSequence()
     fitter._prepare(points)
-    last1, first2, _ = fitter.best_consecutive_segments_separation(seg1, seg2)
+    last1, first2, _ = fitter._best_consecutive_segments_separation(seg1, seg2)
 
     # orphaning saves min(2.25, 2.25) = 2.25 at penalty 1.0 => point 4 orphaned
     assert (last1, first2) == (3, 5)
@@ -51,7 +51,7 @@ def test_subtolerance_corner_point_is_not_orphaned():
 
     fitter = FitterToPointsSequence()
     fitter._prepare(points)
-    last1, first2, _ = fitter.best_consecutive_segments_separation(seg1, seg2)
+    last1, first2, _ = fitter._best_consecutive_segments_separation(seg1, seg2)
 
     # adopting into seg1 costs 0.25 < penalty 1.0 => no orphan
     assert first2 == last1 + 1
@@ -70,7 +70,7 @@ def test_min_segment_guard_blocks_orphaning():
 
     fitter = FitterToPointsSequence()
     fitter._prepare(points)
-    last1, first2, _ = fitter.best_consecutive_segments_separation(seg1, seg2)
+    last1, first2, _ = fitter._best_consecutive_segments_separation(seg1, seg2)
 
     assert first2 == last1 + 1  # no orphan despite point 1 being >tolerance from both lines
     n_seg1 = points_count(len(points), seg1.first_index, last1)
@@ -94,7 +94,7 @@ def test_two_point_segment_corner_point_is_orphaned():
 
     fitter = FitterToPointsSequence()
     fitter._prepare(points)
-    last1, first2, _ = fitter.best_consecutive_segments_separation(seg1, seg2)
+    last1, first2, _ = fitter._best_consecutive_segments_separation(seg1, seg2)
 
     # orphaning saves min(1.2², 1.5²) = 1.44 at penalty 1.0 => point 2 orphaned
     assert (last1, first2) == (1, 3)

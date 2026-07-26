@@ -123,16 +123,16 @@ class FitterToPointsSequence:
                 if self.config.verbose: print("Max segments count reached. Exiting.")
                 return segments
 
-            index_of_segment_to_split = self.choose_segment_index_for_split(segments)
+            index_of_segment_to_split = self._choose_segment_index_for_split(segments)
             if index_of_segment_to_split is None:
                 if self.config.verbose: print("No segments to split. Breaking up at", len(segments), "segments.")
                 return segments
             if self.config.verbose:
                 print(f"splitting at {index_of_segment_to_split}")
 
-            segmentation_after_split = self.split_segment(segments, index_of_segment_to_split)
+            segmentation_after_split = self._split_segment(segments, index_of_segment_to_split)
 
-            new_sse_per_segment = self.adjust_segmentation(segmentation_after_split, index_of_segment_to_split)
+            new_sse_per_segment = self._adjust_segmentation(segmentation_after_split, index_of_segment_to_split)
             if self.config.verbose: print(f"sse per segment: {new_sse_per_segment}")
             if self.config.plot_intermediate_steps:
                 from mask2polymin.plotting import plot_segments
@@ -216,7 +216,7 @@ class FitterToPointsSequence:
                 i += 1
         return segments
 
-    def choose_segment_index_for_split(self, segments: list[SequenceSegment]) -> int | None:
+    def _choose_segment_index_for_split(self, segments: list[SequenceSegment]) -> int | None:
         def needs_split(segment: SequenceSegment) -> bool:
             if segment.points_count() <= 3:
                 return False
@@ -275,7 +275,7 @@ class FitterToPointsSequence:
         offset = min(max(offset, MIN_SEGMENT_POINTS - 1), count - 1 - MIN_SEGMENT_POINTS)
         return (segment.first_index + offset) % n
 
-    def split_segment(self, segments: list[SequenceSegment], segment_to_split_index: int) -> list[SequenceSegment]:
+    def _split_segment(self, segments: list[SequenceSegment], segment_to_split_index: int) -> list[SequenceSegment]:
         segment = segments[segment_to_split_index]
         pivot_point_index = self._max_error_pivot_index(segment)
         seg2_first_index = (pivot_point_index + 1) % len(self.whole_sequence)
@@ -295,7 +295,7 @@ class FitterToPointsSequence:
         cloned_after = [seg.clone() for seg in segments[segment_to_split_index+1:]]
         return cloned_before + [segment1, segment2] + cloned_after
 
-    def adjust_segmentation(self, segments: list[SequenceSegment], start_segment_index:int) -> float:
+    def _adjust_segmentation(self, segments: list[SequenceSegment], start_segment_index:int) -> float:
         sse_per_segment = 0
 
         # The separation search is a pure function of the two segments' index ranges.
@@ -309,7 +309,7 @@ class FitterToPointsSequence:
             if junction_last_scored_state[junction_index] == state:
                 return 0
             junction_last_scored_state[junction_index] = state
-            new_last, new_first, boundary_shift = self.best_consecutive_segments_separation(previous_segment, next_segment)
+            new_last, new_first, boundary_shift = self._best_consecutive_segments_separation(previous_segment, next_segment)
             if boundary_shift > 0:
                 prev_changed = new_last != previous_segment.last_index
                 next_changed = new_first != next_segment.first_index
@@ -373,7 +373,7 @@ class FitterToPointsSequence:
         return sse_per_segment
 
 
-    def best_consecutive_segments_separation(self, segment1: SequenceSegment, segment2: SequenceSegment) -> tuple[int, int, int]:
+    def _best_consecutive_segments_separation(self, segment1: SequenceSegment, segment2: SequenceSegment) -> tuple[int, int, int]:
         """:returns (last index of segment1, first index of segment2, boundary shift),
         between the two indices 0..MAX_ORPHANS_PER_JUNCTION points may be left orphaned;
         the shift is how many positions the junction moved (max over its two ends).
