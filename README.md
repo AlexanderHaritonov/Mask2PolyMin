@@ -113,6 +113,10 @@ The implementation is optimized, uses NumPy broadcasting.
 Benchmarked against RDP (`cv2.approxPolyDP`) on synthetic shapes across noise levels
 ([performance_test/](performance_test/)): comparable on most fidelity metrics (IoU, RMS, Hausdorff). But Mask2PolyMin avoids corner-cutting bias — see [corner_bias](performance_test/charts/fig6_corner_bias.png), [corner_bias comparison](performance_test/charts/comparison_corner_bias.png) and perimeter shrinkage in [perimeter_ratio](performance_test/charts/fig8_perimeter.png), [perimeter_ratio comparison](performance_test/charts/comparison_perimeter.png). Tradeoff: Mask2PolyMin is far slower — although not dramatically slow in absolute terms: 63 ms per contour on average, even on a weak laptop (Intel i5-12450H, UHD Graphics), single-threaded — see [wall-clock time](performance_test/charts/fig11_walltime.png).
 
+<img src="https://raw.githubusercontent.com/AlexanderHaritonov/Mask2PolyMin/main/docs/collage_noise3_fitted.png" alt="10 synthetic shapes at noise level 3 with fitted polygons" width="800">
+
+10 synthetic shapes ([performance_test/](performance_test/)) at noise level 3, Mask2PolyMin fit in red.
+
 ## future work and ideas
 - explore line fitting with Theil–Sen and respectively the Median or Mean Absolute Error as stop criterion ?
 
