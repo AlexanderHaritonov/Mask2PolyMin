@@ -13,6 +13,12 @@ authors = [{name = "Alexander Haritonov"}]
 requires-python = ">=3.10"
 dependencies = ["numpy"]
 keywords = [
+    # Primary
+    "geometric-post-regularization",
+    "polygon-regularization",
+    "mask-to-polygon",
+    "subpixel-line-fitting",
+
     # Broad
     "image-processing",
     "computer-vision",
@@ -32,6 +38,10 @@ keywords = [
     "polygon-simplification",
     "raster-to-vector",
     "vectorization",
+    "computational-geometry",
+    "contour-simplification",
+    "building-footprint-extraction",
+    "segmentation-postprocessing",
 
     # Related algorithms this package is an alternative to (not implemented here)
     "douglas-peucker",
