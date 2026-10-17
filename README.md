@@ -26,6 +26,7 @@ polygon, segments = Fitter().fit(contour)
 Useful for post‑processing bitmask segmentation outputs from models such as MaskRCNN or YOLO‑Seg, especially when regular or low‑complexity shapes are required:
 - obtaining simple geometric representations
 - to reconstruct artificial objects that consist of straight edges, sharp corners, and regular geometric properties.
+- *planned:* use as the inner step of an energy minimization over neighboring faces (topological maps / B-rep) — see [future work](#future-work-and-ideas)
 
 Unlike common point‑thinning algorithms (Ramer–Douglas–Peucker, Visvalingam–Whyatt, Zhang–Suen), this method:
 - minimizes segment count while preserving the raw shape
@@ -118,6 +119,13 @@ Benchmarked against RDP (`cv2.approxPolyDP`) on synthetic shapes across noise le
 10 synthetic shapes ([performance_test/](performance_test/)) at noise level 3, Mask2PolyMin fit in red.
 
 ## future work and ideas
+- `refit()`: a warm-started fit, usable as the inner step of an energy minimization over neighboring faces, e.g. stitching their polygons into a topological map / boundary representation by making them share edges:
+  ```python
+  def refit(self, points_sequence, previous: FitResult, is_closed: bool = False) -> FitResult
+  ```
+  - starts from `previous.segments` instead of a single segment; free segments can still be split and merged.
+  - a segment marked `frozen = True`, with its line set by the caller (e.g. a shared edge fitted to both faces' points), is never refitted, split or merged — only its junctions slide, i.e. which points belong to it.
+
 - explore line fitting with Theil–Sen and respectively the Median or Mean Absolute Error as stop criterion ?
 
 ## Running Tests
