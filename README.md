@@ -123,8 +123,9 @@ Benchmarked against RDP (`cv2.approxPolyDP`) on synthetic shapes across noise le
   ```python
   def refit(self, points_sequence, previous: FitResult, is_closed: bool = False) -> FitResult
   ```
-  - starts from `previous.segments` instead of a single segment; free segments can still be split and merged.
-  - a segment marked `frozen = True`, with its line set by the caller (e.g. a shared edge fitted to both faces' points), is never refitted, split or merged — only its junctions slide, i.e. which points belong to it.
+  - starts from `previous.segments`.
+  - a segment marked `frozen = True`, with its line set by the caller is never refitted, split or merged — only its junctions slide.
+  - probable energy for the outer loop: ```E = Σ_faces Σ_segments sse  +  tolerance² · orphans_count  +  λ · segments_count, λ ≈ 15 · tolerance²```
 
 - explore line fitting with Theil–Sen and respectively the Median or Mean Absolute Error as stop criterion ?
 
