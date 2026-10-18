@@ -22,6 +22,9 @@ class SequenceSegment:
     last_index: int
     line_segment_params: Optional[LineSegmentParams] = None
 
+    ''' Set by the caller, together with the line in line_segment_params. '''
+    frozen: bool = False
+
     def points_count(self) -> int:
         return points_count(len(self.whole_sequence), self.first_index, self.last_index)
 
@@ -31,7 +34,8 @@ class SequenceSegment:
             whole_sequence=self.whole_sequence,  # shared reference, not copied
             first_index=self.first_index,
             last_index=self.last_index,
-            line_segment_params=self.line_segment_params  # immutable, safe to share
+            line_segment_params=self.line_segment_params,  # immutable, safe to share
+            frozen=self.frozen
         )
 
 def print_segments_info(segments):

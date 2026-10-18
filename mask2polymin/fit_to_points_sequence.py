@@ -2,6 +2,7 @@ import numpy as np
 from dataclasses import dataclass
 
 from mask2polymin.sequence_moments import subsequence, fit_range, refit_segment, SequenceMoments, DEGENERATE_STRAIGHTNESS
+from mask2polymin.fit_result import FitResult
 from mask2polymin.line_segment_params import LineSegmentParams
 from mask2polymin.polyline import segments_to_polyline
 from mask2polymin.sequence_segment import SequenceSegment, points_count
@@ -71,7 +72,7 @@ class FitterToPointsSequence:
     def __init__(self, config: FitterConfig | None = None):
         self.config = config or FitterConfig()
 
-    def fit(self, points_sequence: np.ndarray, is_closed: bool = False) -> tuple[np.ndarray, list[SequenceSegment]]:
+    def fit(self, points_sequence: np.ndarray, is_closed: bool = False) -> FitResult:
         self._prepare(points_sequence, is_closed)
 
         segments_sequence = self._fit()
@@ -82,7 +83,7 @@ class FitterToPointsSequence:
         for segment in segments:
             refit_segment(self._moments, segment, with_endpoints=True)
         polygon = segments_to_polyline(segments, is_closed=self.is_closed, tolerance=self.config.tolerance)
-        return polygon, segments
+        return FitResult(polygon, segments)
 
     def _prepare(self, points_sequence: np.ndarray, is_closed: bool = False) -> None:
         """Validate and normalize points_sequence, then set up whole_sequence/is_closed/_moments for fitting."""
