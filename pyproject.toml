@@ -46,6 +46,14 @@ keywords = [
     # Related algorithms this package is an alternative to (not implemented here)
     "douglas-peucker",
     "visvalingam-whyatt",
+
+    # stitching neighboring polygons via shared edges
+    "topology-preserving-simplification",
+    "planar-partition",
+    "shared-boundaries",
+    "semantic-segmentation",
+    "boundary-representation",
+    "b-rep",
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",
