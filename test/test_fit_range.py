@@ -2,8 +2,9 @@
 import numpy as np
 import pytest
 
-from mask2polymin.sequence_moments import principal_axis, subsequence, fit_range
+from mask2polymin.sequence_moments import principal_axis, subsequence, fit_range, fit_range_to_line, DEGENERATE_STRAIGHTNESS
 from mask2polymin.fit_to_points_sequence import FitterToPointsSequence
+from mask2polymin.line_segment_params import LineSegmentParams
 from fit_line_segment_reference import fit_line_segment
 
 
@@ -98,6 +99,82 @@ def test_without_endpoints_same_line_cheaper_params():
     np.testing.assert_allclose(
         full.squared_distances_to_line(points[4:31]),
         slim.squared_distances_to_line(points[4:31]), atol=1e-12)
+
+
+# ---- fit_range_to_line: a given (frozen) line ----
+
+def random_walk_fitter(seed, count=40):
+    rng = np.random.default_rng(seed)
+    points = np.cumsum(rng.normal(0.5, 0.4, size=(count, 2)), axis=0) + 100
+    fitter = FitterToPointsSequence()
+    fitter._prepare(points, is_closed=True)
+    return fitter
+
+
+def random_line(rng):
+    angle = rng.uniform(0, 2 * np.pi)
+    point = rng.uniform(100, 120, 2)
+    return LineSegmentParams(point, point, np.array([np.cos(angle), np.sin(angle)]))
+
+
+@pytest.mark.parametrize("first, last", [(4, 30), (35, 5), (39, 0), (10, 11), (7, 7)])
+def test_fit_range_to_line_matches_direct_computation(first, last):
+    fitter = random_walk_fitter(seed=13)
+    range_points = subsequence(fitter.whole_sequence, first, last)
+    rng = np.random.default_rng(17)
+    for _ in range(20):
+        line = random_line(rng)
+        actual = fit_range_to_line(fitter._moments, first, last, line, with_endpoints=True)
+
+        # the line is kept: same direction, and the given point lies on it
+        np.testing.assert_array_equal(actual.direction, line.direction)
+        assert actual.squared_distances_to_line(line.start_point[None])[0] == pytest.approx(0.0, abs=1e-9)
+
+        assert actual.loss == pytest.approx(line.squared_distances_to_line(range_points).sum(), rel=1e-9, abs=1e-9)
+        projections = (range_points - line.start_point) @ line.direction
+        np.testing.assert_allclose(actual.start_point, line.start_point + projections.min() * line.direction, atol=1e-9)
+        np.testing.assert_allclose(actual.end_point, line.start_point + projections.max() * line.direction, atol=1e-9)
+
+
+def test_fit_range_to_line_on_the_tls_line_matches_fit_range():
+    # fit_range scales its loss by count/(count-1); fit_range_to_line does not
+    fitter = random_walk_fitter(seed=5)
+    fitted = fit_range(fitter._moments, 4, 30, with_endpoints=True)
+    kept = fit_range_to_line(fitter._moments, 4, 30, fitted, with_endpoints=True)
+
+    count = 27
+    assert kept.loss == pytest.approx(fitted.loss * (count - 1) / count, rel=1e-9)
+    assert kept.straightness == pytest.approx(fitted.straightness, rel=1e-9)
+    np.testing.assert_allclose(kept.start_point, fitted.start_point, atol=1e-9)
+    np.testing.assert_allclose(kept.end_point, fitted.end_point, atol=1e-9)
+
+
+def test_fit_range_to_line_without_endpoints():
+    fitter = random_walk_fitter(seed=5)
+    line = random_line(np.random.default_rng(23))
+    full = fit_range_to_line(fitter._moments, 4, 30, line, with_endpoints=True)
+    slim = fit_range_to_line(fitter._moments, 4, 30, line, with_endpoints=False)
+
+    assert slim.loss == full.loss
+    assert slim.straightness == full.straightness
+    # endpoints collapse to the centroid projected onto the line
+    np.testing.assert_array_equal(slim.start_point, slim.end_point)
+    centroid = fitter.whole_sequence[4:31].mean(axis=0)
+    expected = line.start_point + ((centroid - line.start_point) @ line.direction) * line.direction
+    np.testing.assert_allclose(slim.start_point, expected, atol=1e-9)
+
+
+def test_fit_range_to_line_identical_points_degenerate():
+    points = np.array([[5, 5]] * 4 + [[6, 7], [7, 9]], dtype=np.float64)
+    fitter = FitterToPointsSequence()
+    fitter._prepare(points)
+    line = LineSegmentParams(np.array([5.0, 7.0]), np.array([5.0, 7.0]), np.array([1.0, 0.0]))
+    actual = fit_range_to_line(fitter._moments, 0, 3, line, with_endpoints=True)
+
+    assert actual.loss == pytest.approx(4 * 2.0 ** 2)
+    assert actual.straightness == DEGENERATE_STRAIGHTNESS
+    np.testing.assert_allclose(actual.start_point, [5.0, 7.0], atol=1e-9)
+    np.testing.assert_allclose(actual.end_point, [5.0, 7.0], atol=1e-9)
 
 
 def test_principal_axis_matches_eigh():

@@ -4,7 +4,7 @@ import pytest
 
 from mask2polymin import FitResult
 from mask2polymin.fit_to_points_sequence import FitterToPointsSequence, FitterConfig
-from mask2polymin.sequence_moments import SequenceMoments, fit_range
+from mask2polymin.sequence_moments import SequenceMoments, fit_range, subsequence
 from mask2polymin.sequence_segment import SequenceSegment
 
 
@@ -124,3 +124,33 @@ def test_refit_from_misplaced_junctions_is_not_worse_than_fit(side):
     refitted = fitter.refit(points, previous, is_closed=True)
     assert refitted.sse() <= fitted.sse() + 1e-9
     assert len(refitted.segments) == len(fitted.segments) == 4
+
+
+# ---- frozen segments ----
+
+def test_refit_keeps_a_frozen_line_and_computes_loss_and_endpoints_against_it():
+    points = square_contour(10)
+    fitter = FitterToPointsSequence(config=FitterConfig(tolerance=1.0))
+    previous = fitter.fit(points, is_closed=True)
+
+    # close to the fitted line, but not the TLS fit of any points: shifted by 0.3 and turned by 2°
+    fitted_line = previous.segments[1].line_segment_params
+    c, s = np.cos(np.radians(2)), np.sin(np.radians(2))
+    direction = np.array([c * fitted_line.direction[0] - s * fitted_line.direction[1],
+                          s * fitted_line.direction[0] + c * fitted_line.direction[1]])
+    point = fitted_line.start_point + 0.3 * np.array([-fitted_line.direction[1], fitted_line.direction[0]])
+    previous.segments[1].freeze(point, direction)
+    frozen_line = previous.segments[1].line_segment_params
+
+    result = fitter.refit(points, previous, is_closed=True)
+
+    [segment] = [s for s in result.segments if s.frozen]
+    params = segment.line_segment_params
+    np.testing.assert_array_equal(params.direction, frozen_line.direction)
+    assert params.squared_distances_to_line(point[None])[0] == pytest.approx(0.0, abs=1e-12)
+
+    segment_points = subsequence(points, segment.first_index, segment.last_index)
+    assert params.loss == pytest.approx(frozen_line.squared_distances_to_line(segment_points).sum())
+    projections = (segment_points - point) @ frozen_line.direction
+    np.testing.assert_allclose(params.start_point, point + projections.min() * frozen_line.direction, atol=1e-9)
+    np.testing.assert_allclose(params.end_point, point + projections.max() * frozen_line.direction, atol=1e-9)

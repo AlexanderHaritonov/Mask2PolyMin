@@ -95,5 +95,49 @@ def fit_range(moments: SequenceMoments, first_index: int, last_index: int, with_
         straightness=straightness)
 
 
+def fit_range_to_line(moments: SequenceMoments,
+                      first_index: int,
+                      last_index: int,
+                      line: LineSegmentParams,
+                      with_endpoints: bool) -> LineSegmentParams:
+    """Keep `line` (the line of a frozen segment) and compute loss and straightness of the range's points against it, from the prefix moments.
+    loss is the plain sum of squared distances.
+    with_endpoints=False skips the extreme-projections pass and sets start_point == end_point == the centroid projected onto the line."""
+    (sx, sy, sxx, syy, sxy), count = range_moments(moments, first_index, last_index)
+    mean_x, mean_y = sx / count, sy / count
+    cov_xx = sxx / count - mean_x * mean_x
+    cov_yy = syy / count - mean_y * mean_y
+    cov_xy = sxy / count - mean_x * mean_y
+    centroid = np.array([mean_x, mean_y]) + moments.sequence_center
+
+    # sum of squared distances = count * (spread of the points across the line + squared distance of their centroid from the line)
+    direction = line.direction
+    normal = np.array([-direction[1], direction[0]])
+    spread = max(normal[0] * normal[0] * cov_xx + normal[1] * normal[1] * cov_yy + 2.0 * normal[0] * normal[1] * cov_xy, 0.0)
+    offset = float((centroid - line.start_point) @ normal)
+    loss = count * (spread + offset * offset)
+    foot = centroid - offset * normal
+
+    # straightness describes the points, not the line, so it is computed as in fit_range
+    _, eig_max, eig_min = principal_axis(cov_xx, cov_yy, cov_xy)
+    straightness = DEGENERATE_STRAIGHTNESS if eig_max <= 1e-8 else float(eig_min / eig_max)
+
+    if not with_endpoints:
+        return LineSegmentParams(
+            start_point=foot,
+            end_point=foot,
+            direction=direction,
+            loss=loss,
+            straightness=straightness)
+
+    projections = (subsequence(moments.whole_sequence, first_index, last_index) - foot) @ direction
+    return LineSegmentParams(
+        start_point=foot + projections.min() * direction,
+        end_point=foot + projections.max() * direction,
+        direction=direction,
+        loss=loss,
+        straightness=straightness)
+
+
 def refit_segment(moments: SequenceMoments, segment: SequenceSegment, with_endpoints: bool) -> None:
     segment.line_segment_params = fit_range(moments, segment.first_index, segment.last_index, with_endpoints)

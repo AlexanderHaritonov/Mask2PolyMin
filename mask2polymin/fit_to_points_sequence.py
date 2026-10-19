@@ -1,7 +1,7 @@
 import numpy as np
 from dataclasses import dataclass
 
-from mask2polymin.sequence_moments import subsequence, fit_range, refit_segment, SequenceMoments, DEGENERATE_STRAIGHTNESS
+from mask2polymin.sequence_moments import subsequence, fit_range, fit_range_to_line, refit_segment, SequenceMoments, DEGENERATE_STRAIGHTNESS
 from mask2polymin.fit_result import FitResult
 from mask2polymin.line_segment_params import LineSegmentParams
 from mask2polymin.polyline import segments_to_polyline
@@ -104,8 +104,13 @@ class FitterToPointsSequence:
     def _result_with_endpoints(self, segments: list[SequenceSegment]) -> FitResult:
         # During fitting the start and end points of the lines are not computed, because that would need an extra pass over all points.
         # Here every final segment is fitted once more, now with real start and end points.
+        # A frozen segment keeps its line; only loss and the start and end points are computed against it.
         for segment in segments:
-            refit_segment(self._moments, segment, with_endpoints=True)
+            if segment.frozen:
+                segment.line_segment_params = fit_range_to_line(self._moments, segment.first_index, segment.last_index,
+                                                                segment.line_segment_params, with_endpoints=True)
+            else:
+                refit_segment(self._moments, segment, with_endpoints=True)
         polygon = segments_to_polyline(segments, is_closed=self.is_closed, tolerance=self.config.tolerance)
         return FitResult(polygon, segments)
 
