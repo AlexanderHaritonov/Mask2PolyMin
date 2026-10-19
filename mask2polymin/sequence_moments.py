@@ -140,4 +140,10 @@ def fit_range_to_line(moments: SequenceMoments,
 
 
 def refit_segment(moments: SequenceMoments, segment: SequenceSegment, with_endpoints: bool) -> None:
-    segment.line_segment_params = fit_range(moments, segment.first_index, segment.last_index, with_endpoints)
+    """Fit the segment's line to its current points again.
+    A frozen segment keeps its line; only loss, straightness and the start and end points are computed against it."""
+    if segment.frozen:
+        segment.line_segment_params = fit_range_to_line(moments, segment.first_index, segment.last_index,
+                                                        segment.line_segment_params, with_endpoints)
+    else:
+        segment.line_segment_params = fit_range(moments, segment.first_index, segment.last_index, with_endpoints)

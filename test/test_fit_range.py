@@ -2,9 +2,10 @@
 import numpy as np
 import pytest
 
-from mask2polymin.sequence_moments import principal_axis, subsequence, fit_range, fit_range_to_line, DEGENERATE_STRAIGHTNESS
+from mask2polymin.sequence_moments import principal_axis, subsequence, fit_range, fit_range_to_line, refit_segment, DEGENERATE_STRAIGHTNESS
 from mask2polymin.fit_to_points_sequence import FitterToPointsSequence
 from mask2polymin.line_segment_params import LineSegmentParams
+from mask2polymin.sequence_segment import SequenceSegment
 from fit_line_segment_reference import fit_line_segment
 
 
@@ -175,6 +176,27 @@ def test_fit_range_to_line_identical_points_degenerate():
     assert actual.straightness == DEGENERATE_STRAIGHTNESS
     np.testing.assert_allclose(actual.start_point, [5.0, 7.0], atol=1e-9)
     np.testing.assert_allclose(actual.end_point, [5.0, 7.0], atol=1e-9)
+
+
+@pytest.mark.parametrize("with_endpoints", [True, False])
+def test_refit_segment_keeps_a_frozen_line_and_fits_a_free_one(with_endpoints):
+    fitter = random_walk_fitter(seed=5)
+    line = random_line(np.random.default_rng(29))
+    frozen = SequenceSegment(fitter.whole_sequence, 4, 30, line, frozen=True)
+    free = SequenceSegment(fitter.whole_sequence, 4, 30, line)
+
+    refit_segment(fitter._moments, frozen, with_endpoints)
+    refit_segment(fitter._moments, free, with_endpoints)
+
+    expected = fit_range_to_line(fitter._moments, 4, 30, line, with_endpoints)
+    np.testing.assert_array_equal(frozen.line_segment_params.direction, line.direction)
+    np.testing.assert_array_equal(frozen.line_segment_params.start_point, expected.start_point)
+    np.testing.assert_array_equal(frozen.line_segment_params.end_point, expected.end_point)
+    assert frozen.line_segment_params.loss == expected.loss
+
+    fitted = fit_range(fitter._moments, 4, 30, with_endpoints)
+    np.testing.assert_array_equal(free.line_segment_params.direction, fitted.direction)
+    assert free.line_segment_params.loss == fitted.loss
 
 
 def test_principal_axis_matches_eigh():

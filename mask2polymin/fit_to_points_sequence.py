@@ -1,7 +1,7 @@
 import numpy as np
 from dataclasses import dataclass
 
-from mask2polymin.sequence_moments import subsequence, fit_range, fit_range_to_line, refit_segment, SequenceMoments, DEGENERATE_STRAIGHTNESS
+from mask2polymin.sequence_moments import subsequence, fit_range, refit_segment, SequenceMoments, DEGENERATE_STRAIGHTNESS
 from mask2polymin.fit_result import FitResult
 from mask2polymin.line_segment_params import LineSegmentParams
 from mask2polymin.polyline import segments_to_polyline
@@ -106,11 +106,7 @@ class FitterToPointsSequence:
         # Here every final segment is fitted once more, now with real start and end points.
         # A frozen segment keeps its line; only loss and the start and end points are computed against it.
         for segment in segments:
-            if segment.frozen:
-                segment.line_segment_params = fit_range_to_line(self._moments, segment.first_index, segment.last_index,
-                                                                segment.line_segment_params, with_endpoints=True)
-            else:
-                refit_segment(self._moments, segment, with_endpoints=True)
+            refit_segment(self._moments, segment, with_endpoints=True)
         polygon = segments_to_polyline(segments, is_closed=self.is_closed, tolerance=self.config.tolerance)
         return FitResult(polygon, segments)
 
@@ -140,8 +136,8 @@ class FitterToPointsSequence:
         # freeze() sets only the line, so the loss of frozen segments is computed here
         for segment in segments:
             if segment.frozen:
-                segment.line_segment_params = fit_range_to_line(self._moments, segment.first_index, segment.last_index,
-                                                                segment.line_segment_params, with_endpoints=False)
+                refit_segment(self._moments, segment, with_endpoints=False)
+                
         sse_per_segment = self._sse_per_segment(segments)
         if sse_per_segment < self.config.tolerance_sq:
             return segments
@@ -381,7 +377,7 @@ class FitterToPointsSequence:
             # At each junction we:
             #   1. find the best place for the junction;
             #   2. move the end of the previous segment and the start of the next segment there;
-            #   3. fit both segments again.
+            #   3. fit both segments again (a frozen segment keeps its line, only its loss is computed again).
 
             changes_count = 0
 

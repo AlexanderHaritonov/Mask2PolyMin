@@ -4,7 +4,7 @@ import pytest
 
 from mask2polymin import FitResult
 from mask2polymin.fit_to_points_sequence import FitterToPointsSequence, FitterConfig
-from mask2polymin.sequence_moments import SequenceMoments, fit_range, subsequence
+from mask2polymin.sequence_moments import SequenceMoments, fit_range, refit_segment, subsequence
 from mask2polymin.sequence_segment import SequenceSegment
 
 
@@ -231,3 +231,28 @@ def test_fit_does_not_split_when_only_a_frozen_segment_is_out_of_tolerance():
     [segment] = [s for s in result if s.frozen]
     np.testing.assert_array_equal(segment.line_segment_params.direction, frozen_line.direction)
     assert segment.line_segment_params.loss / segment.points_count() > 1.0
+
+
+def test_adjust_segmentation_keeps_a_frozen_line_when_its_junctions_move():
+    points = square_contour(10)
+    segments = misplaced_junctions(points, side=10, shift=3)
+    # Segment 1 covers 13..22: the side x = 10 from y = 3 on, and 3 points past the corner.
+    # It is frozen to a line near that side (shifted by 0.3, turned by 2°), not the TLS fit of any of its points.
+    point = np.array([10.3, 5.0])
+    segments[1].freeze(point, [-np.sin(np.radians(2)), np.cos(np.radians(2))])
+    frozen_line = segments[1].line_segment_params
+
+    fitter = FitterToPointsSequence(config=FitterConfig(tolerance=1.0))
+    fitter._prepare(points, is_closed=True)
+    refit_segment(fitter._moments, segments[1], with_endpoints=False)  # as _fit() does first
+    range_before = (segments[1].first_index, segments[1].last_index)
+
+    fitter._adjust_segmentation(segments, 0)
+
+    segment = segments[1]
+    assert (segment.first_index, segment.last_index) != range_before
+    params = segment.line_segment_params
+    np.testing.assert_array_equal(params.direction, frozen_line.direction)
+    assert params.squared_distances_to_line(point[None])[0] == pytest.approx(0.0, abs=1e-12)
+    segment_points = subsequence(points, segment.first_index, segment.last_index)
+    assert params.loss == pytest.approx(frozen_line.squared_distances_to_line(segment_points).sum())
