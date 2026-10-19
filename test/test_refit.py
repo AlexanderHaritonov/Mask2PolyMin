@@ -53,6 +53,17 @@ def misplaced_junctions(points, side, shift):
     return segments
 
 
+def five_segments_with_gaps(points, frozen_indices):
+    """5 segments of 7 points over the 40 points of square_contour(10), one orphan after each: 7, 15, 23, 31, 39"""
+    moments = SequenceMoments(points)
+    segments = []
+    for k in range(5):
+        first, last = 8 * k, 8 * k + 6
+        segments.append(SequenceSegment(points, first, last, fit_range(moments, first, last, with_endpoints=False),
+                                        frozen=k in frozen_indices))
+    return segments
+
+
 def index_ranges(segments):
     return [(s.first_index, s.last_index) for s in segments]
 
@@ -177,3 +188,46 @@ def test_fit_computes_the_loss_of_frozen_segments_against_their_line():
     assert params.squared_distances_to_line(point[None])[0] == pytest.approx(0.0, abs=1e-12)
     segment_points = subsequence(points, segment.first_index, segment.last_index)
     assert params.loss == pytest.approx(frozen_line.squared_distances_to_line(segment_points).sum())
+
+
+@pytest.mark.parametrize("is_closed, orphans_counted", [(True, 3), (False, 4)])
+def test_sse_per_segment_counts_free_segments_and_orphans_next_to_them_only(is_closed, orphans_counted):
+    # Segments 0, 1 and 4 are frozen. Orphan 7 lies between the frozen 0 and 1, so it never counts.
+    # Orphan 39 lies between the frozen 4 and 0 when closed, and after the last segment when open.
+    points = square_contour(10)
+    segments = five_segments_with_gaps(points, frozen_indices={0, 1, 4})
+    fitter = FitterToPointsSequence(config=FitterConfig(tolerance=1.0))
+    fitter._prepare(points, is_closed=is_closed)
+
+    free = segments[2:4]
+    expected = (sum(s.line_segment_params.loss * s.points_count() for s in free) / sum(s.points_count() for s in free)
+                + orphans_counted * 1.0 / len(free))
+    assert fitter._sse_per_segment(segments) == pytest.approx(expected)
+
+
+def test_sse_per_segment_with_everything_frozen_is_zero():
+    points = square_contour(10)
+    segments = five_segments_with_gaps(points, frozen_indices=set(range(5)))
+    fitter = FitterToPointsSequence(config=FitterConfig(tolerance=1.0))
+    fitter._prepare(points, is_closed=True)
+    assert fitter._sse_per_segment(segments) == 0.0
+
+
+def test_fit_does_not_split_when_only_a_frozen_segment_is_out_of_tolerance():
+    points = square_contour(10)
+    fitter = FitterToPointsSequence(config=FitterConfig(tolerance=1.0))
+    segments = fitter.fit(points, is_closed=True).segments
+
+    # shifted by 2: out of tolerance, while the free segments fit exactly
+    fitted_line = segments[1].line_segment_params
+    segments[1].freeze(fitted_line.start_point + 2.0 * np.array([-fitted_line.direction[1], fitted_line.direction[0]]),
+                       fitted_line.direction)
+    frozen_line = segments[1].line_segment_params
+
+    fitter._prepare(points, is_closed=True)
+    result = fitter._fit(segments)
+
+    assert len(result) == 4
+    [segment] = [s for s in result if s.frozen]
+    np.testing.assert_array_equal(segment.line_segment_params.direction, frozen_line.direction)
+    assert segment.line_segment_params.loss / segment.points_count() > 1.0

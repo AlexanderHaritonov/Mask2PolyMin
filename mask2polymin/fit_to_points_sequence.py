@@ -328,11 +328,25 @@ class FitterToPointsSequence:
         # Point-weighted mean of per-segment SSE for evenly sized segments.
         # Plus "penalty":
         # Each orphan is charged one tolerance-sized outlier, spread over the segments.
-        assigned_count = sum(s.points_count() for s in segments)
-        orphans_count = len(self.whole_sequence) - assigned_count
-        orphans_penalty = orphans_count * self.config.tolerance_sq / len(segments)
-        return (sum(s.line_segment_params.loss * s.points_count() for s in segments) / assigned_count
+        # Only free segments count, because splits and merges cannot change a frozen one.
+        # For the same reason, orphans between two frozen segments do not count either.
+        free_segments = [s for s in segments if not s.frozen]
+        if not free_segments:
+            return 0.0
+        free_assigned_count = sum(s.points_count() for s in free_segments)
+        orphans_count = (len(self.whole_sequence) - sum(s.points_count() for s in segments)
+                         - self._orphans_between_frozen_segments(segments))
+        orphans_penalty = orphans_count * self.config.tolerance_sq / len(free_segments)
+        return (sum(s.line_segment_params.loss * s.points_count() for s in free_segments) / free_assigned_count
                 + orphans_penalty)
+
+    def _orphans_between_frozen_segments(self, segments: list[SequenceSegment]) -> int:
+        n = len(self.whole_sequence)
+        neighbors = (zip(segments, segments[1:] + segments[:1]) if self.is_closed
+                     else zip(segments, segments[1:]))
+        return sum((b.first_index - a.last_index - 1) % n
+                    for a, b in neighbors
+                    if a.frozen and b.frozen)
 
     def _adjust_segmentation(self, segments: list[SequenceSegment], start_segment_index:int) -> float:
         sse_per_segment = 0
