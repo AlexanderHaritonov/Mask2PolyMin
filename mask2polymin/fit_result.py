@@ -7,7 +7,7 @@ from mask2polymin.sequence_segment import SequenceSegment
 
 
 class FitResult(NamedTuple):
-    """Result of FitterToPointsSequence.fit(); unpacks as `polygon, segments`."""
+    """Result of FitterToPointsSequence.fit() and refit(); unpacks as `polygon, segments`."""
     polygon: np.ndarray
     segments: list[SequenceSegment]
 

@@ -83,9 +83,27 @@ class FitterToPointsSequence:
             line_segment_params=fit_range(self._moments, 0, last_index, with_endpoints=False))
         segments_sequence = self._fit([initial_segment])
         segments = self._merge_collinear_segments(segments_sequence)
+        return self._result_with_endpoints(segments)
 
-        # all fits so far skipped the O(n) endpoint-extents pass (start/end points sit at the centroid);
-        # one exact refit per final segment fills in the real extents for the polyline and for callers
+    def refit(self, points_sequence: np.ndarray, previous: FitResult, is_closed: bool = False) -> FitResult:
+        """Fit again, starting from the segmentation in `previous`; `previous` stays intact.
+        points_sequence must be the contour `previous` was fitted to."""
+        self._prepare(points_sequence, is_closed)
+        previous_length = len(previous.segments[0].whole_sequence)
+        if len(self.whole_sequence) != previous_length:
+            raise ValueError(f"points_sequence must be the contour previous was fitted to: got {len(self.whole_sequence)} points "
+                             f"(excluding the closing duplicate), previous has {previous_length}")
+
+        segments = [segment.clone() for segment in previous.segments]
+        for segment in segments:
+            segment.whole_sequence = self.whole_sequence
+        segments_sequence = self._fit(segments)
+        segments = self._merge_collinear_segments(segments_sequence)
+        return self._result_with_endpoints(segments)
+
+    def _result_with_endpoints(self, segments: list[SequenceSegment]) -> FitResult:
+        # During fitting the start and end points of the lines are not computed, because that would need an extra pass over all points.
+        # Here every final segment is fitted once more, now with real start and end points.
         for segment in segments:
             refit_segment(self._moments, segment, with_endpoints=True)
         polygon = segments_to_polyline(segments, is_closed=self.is_closed, tolerance=self.config.tolerance)
