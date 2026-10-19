@@ -65,7 +65,7 @@ class FitterConfig:
 
     @property
     def tolerance_sq(self) -> float:
-        # squared form used internally for L2 comparisons; derived on access so it can never desync from a later change to tolerance
+        # squared form used internally for L2 comparisons. It is computed each time it is read, so it is always right, even if tolerance is changed later.
         return self.tolerance ** 2
 
 class FitterToPointsSequence:
@@ -111,7 +111,7 @@ class FitterToPointsSequence:
 
     def _prepare(self, points_sequence: np.ndarray, is_closed: bool = False) -> None:
         """Validate and normalize points_sequence, then set up whole_sequence/is_closed/_moments for fitting."""
-        # no-op for float64 (N, 2) ndarray input; coerces lists and integer contours once, up front
+        # Converts lists and integer arrays to float64, once, at the start. A float64 array of shape (N, 2) is used as it is, without a copy.
         points_sequence = np.asarray(points_sequence, dtype=np.float64)
         if points_sequence.ndim == 3 and points_sequence.shape[1] == 1:
             points_sequence = points_sequence[:, 0, :]  # cv2.findContours' native (N, 1, 2) shape
@@ -187,8 +187,8 @@ class FitterToPointsSequence:
         return False
 
     def _merge_collinear_segments(self, segments: list[SequenceSegment]) -> list[SequenceSegment]:
-        # single-pass index walk,
-        # in case of merge index is set back to try the merge with neighbour segment
+        # We go once through the pairs of neighboring segments.
+        # After a merge we go back one step, so the merged segment is also tried with its left neighbor.
         i = 0
         while True:
             n = len(segments)
@@ -222,8 +222,9 @@ class FitterToPointsSequence:
                 if self.config.verbose:
                     print(f"Merged segments {i} and {(i+1) % n}")
                 if self.is_closed and i == n - 1:
-                    # the wrap merge consumed the first and last elements; the list is a ring, so append merged at the END and resume just before it
-                    # the walk then checks exactly the two pairs involving 'merged'.
+                    # Here the last and the first segment were merged (closed contour).
+                    # The list is a ring, so append the merged segment at the end and resume just before it.
+                    # The walk then checks exactly the two pairs involving merged segment.
                     # All earlier pairs are unchanged and were already checked, so nothing is re-walked.
                     segments = segments[1:-1] + [merged]
                     i = max(0, len(segments) - 2)
@@ -282,8 +283,8 @@ class FitterToPointsSequence:
         return core_line.squared_distances_to_line(points)
 
     def _max_error_pivot_index(self, segment: SequenceSegment) -> int:
-        """Index of the point with the largest squared deviation from the segment's fitted line,
-        clamped so both children keep at least MIN_SEGMENT_POINTS points.
+        """Index of the point farthest from the segment's line.
+          If needed it is moved inwards, so that both new segments keep at least MIN_SEGMENT_POINTS points.
         Splitting  exactly at the worst point resolves an off-center corner in one cut instead of many rounds of midpoint bisection."""
         n = len(self.whole_sequence)
         count = segment.points_count()
@@ -314,7 +315,8 @@ class FitterToPointsSequence:
         return cloned_before + [segment1, segment2] + cloned_after
 
     def _sse_per_segment(self, segments: list[SequenceSegment]) -> float:
-        # Point-weighted mean of per-segment SSE for evenly sized segments. Plus "penalty":
+        # Point-weighted mean of per-segment SSE for evenly sized segments.
+        # Plus "penalty":
         # Each orphan is charged one tolerance-sized outlier, spread over the segments.
         assigned_count = sum(s.points_count() for s in segments)
         orphans_count = len(self.whole_sequence) - assigned_count
@@ -350,12 +352,12 @@ class FitterToPointsSequence:
             return boundary_shift
 
         for iterations_count in range(MAX_ADJUST_ITERATIONS):
-            # The start segment is typically the 1st segment of the pair resulting from the split.
-            # Then we do iterations of following (at most MAX_ITERATIONS)
-            # we go in the direction of increasing index and for each segment:
-            #   1. find out where the border to the next consecutive segment should be
-            #   2. adjust where the previous segment ends and the next segment starts
-            #   3. re-fit both segments.
+            # We start at the first of the two segments from the split.
+            # In each pass (at most MAX_ADJUST_ITERATIONS) we go to higher indices, then from the start back to lower indices, and for a closed contour also to the junction between the last and the first segment.
+            # At each junction we:
+            #   1. find the best place for the junction;
+            #   2. move the end of the previous segment and the start of the next segment there;
+            #   3. fit both segments again.
 
             changes_count = 0
 
@@ -376,9 +378,9 @@ class FitterToPointsSequence:
                     changes_count += 1
 
             sse_per_segment = self._sse_per_segment(segments)
-            # In a "good enough" state improving moves may still be pending: they only
-            # become visible against the lines refitted during this pass. Grant one
-            # extra pass after the gate is satisfied before returning.
+            # Even when the error is within tolerance, some junctions may still move to better places.
+            # We see this only with the lines fitted again in this pass.
+            # So this check ends the loop only from the second pass on.
             if sse_per_segment < self.config.tolerance_sq and iterations_count > 0:
                 if self.config.verbose:
                     print(f"at {len(segments)} segments, {iterations_count} iterations sse per segment within tolerance. Breaking up")
@@ -419,8 +421,8 @@ class FitterToPointsSequence:
             segment1.line_segment_params.loss / segment1.points_count() <= self.config.tolerance_sq
             and segment2.line_segment_params.loss / segment2.points_count() <= self.config.tolerance_sq)
         if both_fits_within_tolerance:
-            # Score against the uncontested core halves: a junction outlier cannot vouch for itself through the fit it has dragged.
-            # The core's outer end may itself hold an undetected outlier of the neighboring junction, so trim up to max_orphans_per_junction points there.
+            # Score against the uncontested core halves.
+            # The outer end of a core is near the segment's other junction and may hold an outlier from there, so we leave out up to MAX_ORPHANS_PER_JUNCTION points at that end.
             trim1 = max(0, min(MAX_ORPHANS_PER_JUNCTION,
                                points_count(n, segment1.first_index, left_limit) - MIN_SEGMENT_POINTS))
             trim2 = max(0, min(MAX_ORPHANS_PER_JUNCTION,
@@ -441,7 +443,7 @@ class FitterToPointsSequence:
         retained2_outside = (0 if right_limit == segment2.last_index
                              else points_count(n, right_limit, segment2.last_index) - 1)
 
-        # refuse to starve either segment below two points, the minimum needed to fit a line
+        # refuse to squezze either segment below two points, the minimum needed to fit a line
         w = relevant_points.shape[0]
         i_range = np.arange(w - 1)
         remaining1 = retained1_outside + i_range + 1
@@ -466,7 +468,7 @@ class FitterToPointsSequence:
 
     def _best_cut_with_orphans(self, head_cum, tail_cum, retained1_outside, retained2_outside,
                                gapless_cost, gapless_i) -> tuple[int, int]:
-        """Search cuts leaving 1..max_orphans_per_junction window points orphaned;
+        """Try cuts that leave 1 to MAX_ORPHANS_PER_JUNCTION points of the window as orphans.
         :returns (cut index i, gap) in window coordinates. Fewer orphans win ties."""
         w = len(head_cum)
         best_cost, best_i, best_gap = gapless_cost, gapless_i, 0
