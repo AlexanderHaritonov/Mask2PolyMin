@@ -75,7 +75,13 @@ class FitterToPointsSequence:
     def fit(self, points_sequence: np.ndarray, is_closed: bool = False) -> FitResult:
         self._prepare(points_sequence, is_closed)
 
-        segments_sequence = self._fit()
+        last_index = len(self.whole_sequence) - 1
+        initial_segment = SequenceSegment(
+            whole_sequence=self.whole_sequence,
+            first_index=0,
+            last_index=last_index,
+            line_segment_params=fit_range(self._moments, 0, last_index, with_endpoints=False))
+        segments_sequence = self._fit([initial_segment])
         segments = self._merge_collinear_segments(segments_sequence)
 
         # all fits so far skipped the O(n) endpoint-extents pass (start/end points sit at the centroid);
@@ -106,16 +112,9 @@ class FitterToPointsSequence:
         self.is_closed = is_closed
         self._moments = SequenceMoments(self.whole_sequence)
 
-    def _fit(self) -> list[SequenceSegment]:
-        segment_params: LineSegmentParams = fit_range(self._moments, 0, len(self.whole_sequence) - 1, with_endpoints=False)
-        initial_segment = SequenceSegment(
-            whole_sequence=self.whole_sequence,
-            first_index=0,
-            last_index=len(self.whole_sequence)-1,
-            line_segment_params=segment_params)
-        segments = [initial_segment]
-
-        sse_per_segment = segment_params.loss  # single segment: total SSE == SSE per segment
+    def _fit(self, segments: list[SequenceSegment]) -> list[SequenceSegment]:
+        """Split and adjust, starting from the given segmentation of whole_sequence."""
+        sse_per_segment = self._sse_per_segment(segments)
         if sse_per_segment < self.config.tolerance_sq:
             return segments
 
@@ -296,6 +295,15 @@ class FitterToPointsSequence:
         cloned_after = [seg.clone() for seg in segments[segment_to_split_index+1:]]
         return cloned_before + [segment1, segment2] + cloned_after
 
+    def _sse_per_segment(self, segments: list[SequenceSegment]) -> float:
+        # Point-weighted mean of per-segment SSE for evenly sized segments. Plus "penalty":
+        # Each orphan is charged one tolerance-sized outlier, spread over the segments.
+        assigned_count = sum(s.points_count() for s in segments)
+        orphans_count = len(self.whole_sequence) - assigned_count
+        orphans_penalty = orphans_count * self.config.tolerance_sq / len(segments)
+        return (sum(s.line_segment_params.loss * s.points_count() for s in segments) / assigned_count
+                + orphans_penalty)
+
     def _adjust_segmentation(self, segments: list[SequenceSegment], start_segment_index:int) -> float:
         sse_per_segment = 0
 
@@ -349,13 +357,7 @@ class FitterToPointsSequence:
                 if boundary_shift > 1:
                     changes_count += 1
 
-            # Point-weighted mean of per-segment SSE for evenly sized segments. Plus "penalty":
-            # Each orphan is charged one tolerance-sized outlier, spread over the segments, so orphaning is never free in the stop/improvement gates.
-            assigned_count = sum(s.points_count() for s in segments)
-            orphans_count = len(self.whole_sequence) - assigned_count
-            orphans_penalty = orphans_count * self.config.tolerance_sq / len(segments)
-            sse_per_segment = (sum(s.line_segment_params.loss * s.points_count() for s in segments) / assigned_count
-                               + orphans_penalty)
+            sse_per_segment = self._sse_per_segment(segments)
             # In a "good enough" state improving moves may still be pending: they only
             # become visible against the lines refitted during this pass. Grant one
             # extra pass after the gate is satisfied before returning.
