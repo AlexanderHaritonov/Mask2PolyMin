@@ -154,3 +154,26 @@ def test_refit_keeps_a_frozen_line_and_computes_loss_and_endpoints_against_it():
     projections = (segment_points - point) @ frozen_line.direction
     np.testing.assert_allclose(params.start_point, point + projections.min() * frozen_line.direction, atol=1e-9)
     np.testing.assert_allclose(params.end_point, point + projections.max() * frozen_line.direction, atol=1e-9)
+
+
+def test_fit_computes_the_loss_of_frozen_segments_against_their_line():
+    points = square_contour(10)
+    fitter = FitterToPointsSequence(config=FitterConfig(tolerance=1.0))
+    segments = fitter.fit(points, is_closed=True).segments
+
+    # shifted by 0.3: within tolerance, so _fit() returns without splitting
+    fitted_line = segments[1].line_segment_params
+    point = fitted_line.start_point + 0.3 * np.array([-fitted_line.direction[1], fitted_line.direction[0]])
+    segments[1].freeze(point, fitted_line.direction)
+    frozen_line = segments[1].line_segment_params
+    assert frozen_line.loss == 0.0  # freeze() sets only the line
+
+    fitter._prepare(points, is_closed=True)
+    result = fitter._fit(segments)
+
+    [segment] = [s for s in result if s.frozen]
+    params = segment.line_segment_params
+    np.testing.assert_array_equal(params.direction, frozen_line.direction)
+    assert params.squared_distances_to_line(point[None])[0] == pytest.approx(0.0, abs=1e-12)
+    segment_points = subsequence(points, segment.first_index, segment.last_index)
+    assert params.loss == pytest.approx(frozen_line.squared_distances_to_line(segment_points).sum())

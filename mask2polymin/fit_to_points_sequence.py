@@ -137,6 +137,11 @@ class FitterToPointsSequence:
 
     def _fit(self, segments: list[SequenceSegment]) -> list[SequenceSegment]:
         """Split and adjust, starting from the given segmentation of whole_sequence."""
+        # freeze() sets only the line, so the loss of frozen segments is computed here
+        for segment in segments:
+            if segment.frozen:
+                segment.line_segment_params = fit_range_to_line(self._moments, segment.first_index, segment.last_index,
+                                                                segment.line_segment_params, with_endpoints=False)
         sse_per_segment = self._sse_per_segment(segments)
         if sse_per_segment < self.config.tolerance_sq:
             return segments
