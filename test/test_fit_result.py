@@ -66,7 +66,8 @@ def test_sse_of_frozen_segment_uses_frozen_line():
     # pairs at y=0 and y=1 for each x: the TLS line is exactly y=0.5
     points = np.array([[x, y] for x in range(3) for y in (0, 1)], dtype=np.float64)
     fitted = SequenceSegment(points, 0, 5, fit_range(SequenceMoments(points), 0, 5, with_endpoints=False))
-    frozen = SequenceSegment(points, 0, 5, make_params([0, 0], [5, 0]), frozen=True)
+    frozen = SequenceSegment(points, 0, 5, fit_range(SequenceMoments(points), 0, 5, with_endpoints=False))
+    frozen.freeze([0, 0], [1, 0])
 
     # frozen line y=0: the three points at y=1 count 1 each, not the fitted line's 0.25
     assert FitResult(np.empty((0, 2)), [frozen]).sse() == pytest.approx(3.0)
@@ -129,6 +130,17 @@ def test_frozen_defaults_to_false_and_clone_copies_it():
 
     segment.frozen = True
     assert segment.clone().frozen is True
+
+
+def test_freeze_sets_line_and_flag():
+    points = zigzag(6)
+    segment = SequenceSegment(points, 0, 5, make_params([0, 0], [5, 0]))
+    segment.freeze([0, 1], [3, 0])  # direction need not be unit length
+
+    assert segment.frozen is True
+    np.testing.assert_allclose(segment.line_segment_params.start_point, [0, 1])
+    np.testing.assert_allclose(segment.line_segment_params.direction, [1, 0])
+    assert (segment.first_index, segment.last_index) == (0, 5)
 
 
 def test_fit_returns_no_frozen_segments():

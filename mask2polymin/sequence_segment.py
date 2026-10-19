@@ -22,11 +22,19 @@ class SequenceSegment:
     last_index: int
     line_segment_params: Optional[LineSegmentParams] = None
 
-    ''' Set by the caller, together with the line in line_segment_params. '''
+    ''' Set by the caller via freeze(), together with the line in line_segment_params. '''
     frozen: bool = False
 
     def points_count(self) -> int:
         return points_count(len(self.whole_sequence), self.first_index, self.last_index)
+
+    def freeze(self, point: np.ndarray, direction: np.ndarray) -> None:
+        """Pin this segment to the line through `point` along `direction`; refit() will not refit, split or merge it.
+        refit() fills in loss and the segment's start and end points."""
+        direction = np.asarray(direction, dtype=np.float64)
+        point = np.asarray(point, dtype=np.float64)
+        self.line_segment_params = LineSegmentParams(point, point, direction / np.linalg.norm(direction))
+        self.frozen = True
 
     def clone(self) -> 'SequenceSegment':
         """Create a copy of this segment (whole_sequence is shared, line_segment_params is immutable)"""

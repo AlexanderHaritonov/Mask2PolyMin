@@ -1,6 +1,6 @@
 import numpy as np
 from numpy.typing import NDArray
-from dataclasses import dataclass
+from dataclasses import dataclass, KW_ONLY
 
 
 @dataclass(frozen=True)
@@ -8,7 +8,10 @@ class LineSegmentParams:
     start_point: NDArray[np.float64]
     end_point: NDArray[np.float64]
     direction: NDArray[np.float64]  # unit (length 1) direction vector
-    loss: float
+
+    # Computed by the fitter: read them, but don't pass them.
+    _: KW_ONLY
+    loss: float = 0.0
     straightness: float = 0.0  # min_eigenvalue / max_eigenvalue: 0 = perfectly straight, 1 = circular
 
     def squared_distances_to_line(self, points: np.ndarray) -> np.ndarray:

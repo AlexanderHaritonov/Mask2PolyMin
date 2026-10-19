@@ -50,7 +50,7 @@ def fit_line_segment(points: np.ndarray) -> LineSegmentParams:
     error = N * min_eigval
     straightness = float(min_eigval / max_eigval) if max_eigval > 0 else 0.0
 
-    return LineSegmentParams(p1, p2, direction, error, straightness)
+    return LineSegmentParams(p1, p2, direction, loss=error, straightness=straightness)
 
 
 # Two real mask edges (dense pixel contour fragments) for smoke tests and eyeballing.
