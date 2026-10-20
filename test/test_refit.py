@@ -221,23 +221,24 @@ def test_sse_per_segment_with_everything_frozen_is_zero():
 
 
 def test_fit_does_not_split_when_only_a_frozen_segment_is_out_of_tolerance():
+    # Side 1 is frozen 2 px off: out of tolerance. Sides 0 and 2 are frozen to their own lines,
+    # so the junctions of side 1 do not move. The free side 3 fits exactly.
     points = square_contour(10)
     fitter = FitterToPointsSequence(config=FitterConfig(tolerance=1.0))
     segments = fitter.fit(points, is_closed=True).segments
-
-    # shifted by 2: out of tolerance, while the free segments fit exactly
-    fitted_line = segments[1].line_segment_params
-    segments[1].freeze(fitted_line.start_point + 2.0 * np.array([-fitted_line.direction[1], fitted_line.direction[0]]),
-                       fitted_line.direction)
+    freeze_shifted(segments[0], 0.0)
+    freeze_shifted(segments[1], 2.0)
+    freeze_shifted(segments[2], 0.0)
     frozen_line = segments[1].line_segment_params
+    range_before = (segments[1].first_index, segments[1].last_index)
 
     fitter._prepare(points, is_closed=True)
     result = fitter._fit(segments)
 
     assert len(result) == 4
-    [segment] = [s for s in result if s.frozen]
-    np.testing.assert_array_equal(segment.line_segment_params.direction, frozen_line.direction)
-    assert segment.line_segment_params.loss / segment.points_count() > 1.0
+    assert (result[1].first_index, result[1].last_index) == range_before
+    np.testing.assert_array_equal(result[1].line_segment_params.direction, frozen_line.direction)
+    assert result[1].line_segment_params.loss / result[1].points_count() > 1.0
 
 
 def test_adjust_segmentation_keeps_a_frozen_line_when_its_junctions_move():
@@ -394,3 +395,37 @@ def test_refit_never_splits_or_merges_frozen_segments_and_keeps_their_order():
 
     order = [matching_line_index(s.line_segment_params, frozen_lines) for s in result.segments if s.frozen]
     assert order in ([0, 1, 2], [1, 2, 0], [2, 0, 1])  # the same cyclic order
+
+
+def test_refit_moves_the_junctions_next_to_a_moved_frozen_line():
+    # Side 1 (x = 10, indices 10..19) is frozen to a tilted line, within tolerance on average, but 1.1 px off at y = 1.
+    # The free segments fit exactly, so no split happens: only the adjust pass moves the junction.
+    points = square_contour(10)
+    fitter = FitterToPointsSequence(config=FitterConfig(tolerance=1.0))
+    previous = fitter.fit(points, is_closed=True)
+    previous.segments[1].freeze([10.3, 4.5], [-0.8 / 3.5, 1.0])
+
+    result = fitter.refit(points, previous, is_closed=True)
+
+    assert len(result.segments) == 4
+    [segment] = [s for s in result.segments if s.frozen]
+    assert segment.first_index > previous.segments[1].first_index
+
+
+@pytest.mark.parametrize("second_point, second_direction", [
+    ([0.0, 0.0], [1.0, 0.0]),                                     # the same line
+    ([0.0, 0.1], [np.cos(np.radians(0.5)), np.sin(np.radians(0.5))]),   # almost the same line
+])
+def test_junction_between_two_frozen_segments_does_not_move(second_point, second_direction):
+    # Side 0 of a 20-square is cut at 9|10, and both halves are frozen to (almost) the same line.
+    # The free 40..79 covers two corners, so _fit() splits and adjusts every junction.
+    points = square_contour(20)
+    segments = segments_from_ranges(points, [(0, 9), (10, 19), (20, 39), (40, 79)])
+    segments[0].freeze([0.0, 0.0], [1.0, 0.0])
+    segments[1].freeze(second_point, second_direction)
+
+    result = FitterToPointsSequence(config=FitterConfig(tolerance=1.0)).refit(
+        points, FitResult(np.empty((0, 2)), segments), is_closed=True)
+
+    [first, second] = [s for s in result.segments if s.frozen]
+    assert (first.last_index, second.first_index) == (9, 10)

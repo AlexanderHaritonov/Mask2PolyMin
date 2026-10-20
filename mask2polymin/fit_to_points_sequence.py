@@ -138,7 +138,11 @@ class FitterToPointsSequence:
             if segment.frozen:
                 refit_segment(self._moments, segment, with_endpoints=False)
                 
-        sse_per_segment = self._sse_per_segment(segments)
+        # A frozen line may have moved, so the junctions are adjusted first. Otherwise they would move only after a split.
+        if any(segment.frozen for segment in segments):
+            sse_per_segment = self._adjust_segmentation(segments, 0)
+        else:
+            sse_per_segment = self._sse_per_segment(segments)
         if sse_per_segment < self.config.tolerance_sq:
             return segments
 
@@ -357,6 +361,8 @@ class FitterToPointsSequence:
         junction_last_scored_state = [None] * len(segments)
 
         def find_optimal_break_and_adjust(junction_index, previous_segment, next_segment) -> int:
+            if previous_segment.frozen and next_segment.frozen:
+                return 0
             state = (previous_segment.first_index, previous_segment.last_index,
                      next_segment.first_index, next_segment.last_index)
             if junction_last_scored_state[junction_index] == state:
