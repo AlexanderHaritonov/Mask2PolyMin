@@ -64,6 +64,13 @@ def five_segments_with_gaps(points, frozen_indices):
     return segments
 
 
+def segments_from_ranges(points, ranges, frozen_indices=()):
+    """fitted segments over the given index ranges; those in frozen_indices are marked frozen, with their fitted line"""
+    moments = SequenceMoments(points)
+    return [SequenceSegment(points, first, last, fit_range(moments, first, last, with_endpoints=False), frozen=k in frozen_indices)
+            for k, (first, last) in enumerate(ranges)]
+
+
 def index_ranges(segments):
     return [(s.first_index, s.last_index) for s in segments]
 
@@ -303,3 +310,87 @@ def test_separation_allows_orphans_next_to_a_frozen_line_out_of_tolerance():
 
     new_last, new_first, _ = fitter._best_consecutive_segments_separation(frozen, free)
     assert (new_last, new_first) == (16, 19)
+
+
+# Segment 0 covers the corner at index 10: side 0 and the first 5 points of side 1.
+CORNER_INSIDE_FIRST_SEGMENT = [(0, 14), (15, 19), (20, 29), (30, 39)]
+
+
+@pytest.mark.parametrize("frozen_indices, expected", [((), 0), ((0,), None)])
+def test_choose_segment_index_for_split_skips_frozen_segments(frozen_indices, expected):
+    points = square_contour(10)
+    segments = segments_from_ranges(points, CORNER_INSIDE_FIRST_SEGMENT, frozen_indices)
+    fitter = FitterToPointsSequence(config=FitterConfig(tolerance=1.0))
+    fitter._prepare(points, is_closed=True)
+    assert fitter._choose_segment_index_for_split(segments) == expected
+
+
+@pytest.mark.parametrize("frozen_indices, expected", [((), True), ((0,), False)])
+def test_has_severe_local_defect_skips_frozen_segments(frozen_indices, expected):
+    points = square_contour(10)
+    segments = segments_from_ranges(points, CORNER_INSIDE_FIRST_SEGMENT, frozen_indices)
+    fitter = FitterToPointsSequence(config=FitterConfig(tolerance=1.0))
+    fitter._prepare(points, is_closed=True)
+    assert fitter._has_severe_local_defect(segments) == expected
+
+
+@pytest.mark.parametrize("frozen_indices, expected_count", [((), 4), ((0,), 5), ((1,), 5), ((0, 1), 5)])
+def test_merge_collinear_segments_skips_frozen_segments(frozen_indices, expected_count):
+    # side 0 is cut into two collinear halves: 0..4 and 5..9
+    points = square_contour(10)
+    segments = segments_from_ranges(points, [(0, 4), (5, 9), (10, 19), (20, 29), (30, 39)], frozen_indices)
+    fitter = FitterToPointsSequence(config=FitterConfig(tolerance=1.0))
+    fitter._prepare(points, is_closed=True)
+
+    merged = fitter._merge_collinear_segments(segments)
+    assert len(merged) == expected_count
+    assert sum(s.frozen for s in merged) == len(frozen_indices)
+
+
+def freeze_shifted(segment, shift):
+    """freeze the segment to its current line, moved sideways by `shift`"""
+    line = segment.line_segment_params
+    segment.freeze(line.start_point + shift * np.array([-line.direction[1], line.direction[0]]), line.direction)
+
+
+def matching_line_index(params, lines):
+    """index of the line in `lines` that `params` lies on: same direction, and the line's point lies on it"""
+    [k] = [k for k, line in enumerate(lines)
+           if np.array_equal(params.direction, line.direction)
+           and params.squared_distances_to_line(line.start_point[None])[0] == pytest.approx(0.0, abs=1e-12)]
+    return k
+
+
+def test_refit_with_everything_frozen_keeps_segments_and_lines():
+    # Side 0 is cut into two collinear halves. All 5 segments are frozen to their lines, moved by 0.1 to 0.5,
+    # so no two frozen lines are the same.
+    points = square_contour(10)
+    segments = segments_from_ranges(points, [(0, 4), (5, 9), (10, 19), (20, 29), (30, 39)])
+    for k, segment in enumerate(segments):
+        freeze_shifted(segment, 0.1 * (k + 1))
+    frozen_lines = [s.line_segment_params for s in segments]
+
+    result = FitterToPointsSequence(config=FitterConfig(tolerance=1.0)).refit(
+        points, FitResult(np.empty((0, 2)), segments), is_closed=True)
+
+    assert all(s.frozen for s in result.segments)
+    assert [matching_line_index(s.line_segment_params, frozen_lines) for s in result.segments] == [0, 1, 2, 3, 4]
+
+
+def test_refit_never_splits_or_merges_frozen_segments_and_keeps_their_order():
+    # 0..4 (side 0) frozen to y = 0; the free 5..9 is collinear with it.
+    # 10..24 (side 1 and 5 points of side 2) frozen to x = 10.
+    # The free 25..32 covers the corner at index 30.
+    # 33..39 (side 3) frozen to x = 0.
+    points = square_contour(10)
+    segments = segments_from_ranges(points, [(0, 4), (5, 9), (10, 24), (25, 32), (33, 39)])
+    segments[0].freeze([0.0, 0.0], [1.0, 0.0])
+    segments[2].freeze([10.0, 0.0], [0.0, 1.0])
+    segments[4].freeze([0.0, 0.0], [0.0, 1.0])
+    frozen_lines = [s.line_segment_params for s in segments if s.frozen]
+
+    result = FitterToPointsSequence(config=FitterConfig(tolerance=1.0)).refit(
+        points, FitResult(np.empty((0, 2)), segments), is_closed=True)
+
+    order = [matching_line_index(s.line_segment_params, frozen_lines) for s in result.segments if s.frozen]
+    assert order in ([0, 1, 2], [1, 2, 0], [2, 0, 1])  # the same cyclic order

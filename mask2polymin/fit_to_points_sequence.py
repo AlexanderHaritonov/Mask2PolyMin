@@ -185,7 +185,7 @@ class FitterToPointsSequence:
         
         threshold = LOCAL_DEFECT_MARGIN * self.config.tolerance_sq
         for segment in segments:
-            if segment.points_count() <= 3:
+            if segment.frozen or segment.points_count() <= 3:
                 continue
             points = subsequence(self.whole_sequence, segment.first_index, segment.last_index)
             if segment.line_segment_params.squared_distances_to_line(points).max() > threshold:
@@ -203,6 +203,10 @@ class FitterToPointsSequence:
                 break
             a = segments[i]
             b = segments[(i + 1) % n]
+
+            if a.frozen or b.frozen:
+                i += 1
+                continue
 
             # cheap pre-check: skip pairs whose directions diverge too much;
             # bypassed when either segment is too short for a trustworthy direction estimate
@@ -243,7 +247,7 @@ class FitterToPointsSequence:
 
     def _choose_segment_index_for_split(self, segments: list[SequenceSegment]) -> int | None:
         def needs_split(segment: SequenceSegment) -> bool:
-            if segment.points_count() <= 3:
+            if segment.frozen or segment.points_count() <= 3:
                 return False
             if segment.line_segment_params.loss / segment.points_count() > self.config.tolerance_sq:
                 return True
