@@ -422,7 +422,7 @@ class FitterToPointsSequence:
         the shift is how many positions the junction moved (max over its two ends).
         The contested window (that is range of points that can change segment they belong to) is scored against each segment's uncontested core-half line,
         so a junction outlier cannot vouch for itself through its own segment's fit.
-        Orphaning a point costs tolerance_sq, so a point is orphaned iff it lies farther than tolerance from both core lines."""
+        Orphaning a point costs tolerance_sq, so a point is orphaned iff it lies farther than tolerance from both lines."""
 
         n = len(self.whole_sequence)
         assert (segment2.first_index - segment1.last_index - 1) % n <= MAX_ORPHANS_PER_JUNCTION
@@ -436,21 +436,29 @@ class FitterToPointsSequence:
         old_i = (segment1.last_index - left_limit) % n
         old_j = (segment2.first_index - left_limit) % n
 
-        # Fine-tuning is only sound when both lines already fit their points well.
-        both_fits_within_tolerance = (
-            segment1.line_segment_params.loss / segment1.points_count() <= self.config.tolerance_sq
-            and segment2.line_segment_params.loss / segment2.points_count() <= self.config.tolerance_sq)
-        if both_fits_within_tolerance:
-            # Score against the uncontested core halves.
+        # Fine-tuning is only sound when the free lines already fit their points well.
+        # A frozen line does not count and points far from it should be able to become orphans.
+        free_fits_within_tolerance = (
+            (segment1.frozen or segment1.line_segment_params.loss / segment1.points_count() <= self.config.tolerance_sq)
+            and (segment2.frozen or segment2.line_segment_params.loss / segment2.points_count() <= self.config.tolerance_sq))
+        if free_fits_within_tolerance:
+            # Score a free segment against its uncontested core half.
             # The outer end of a core is near the segment's other junction and may hold an outlier from there, so we leave out up to MAX_ORPHANS_PER_JUNCTION points at that end.
-            trim1 = max(0, min(MAX_ORPHANS_PER_JUNCTION,
-                               points_count(n, segment1.first_index, left_limit) - MIN_SEGMENT_POINTS))
-            trim2 = max(0, min(MAX_ORPHANS_PER_JUNCTION,
-                               points_count(n, right_limit, segment2.last_index) - MIN_SEGMENT_POINTS))
-            squared_errors_seg1 = self._squared_errors_to_core_line(
-                (segment1.first_index + trim1) % n, left_limit, segment1.line_segment_params, relevant_points)
-            squared_errors_seg2 = self._squared_errors_to_core_line(
-                right_limit, (segment2.last_index - trim2) % n, segment2.line_segment_params, relevant_points)
+            # Score a frozen segment against its own line: the contested points do not vouch.
+            if segment1.frozen:
+                squared_errors_seg1 = segment1.line_segment_params.squared_distances_to_line(relevant_points)
+            else:
+                trim1 = max(0, min(MAX_ORPHANS_PER_JUNCTION,
+                                   points_count(n, segment1.first_index, left_limit) - MIN_SEGMENT_POINTS))
+                squared_errors_seg1 = self._squared_errors_to_core_line(
+                    (segment1.first_index + trim1) % n, left_limit, segment1.line_segment_params, relevant_points)
+            if segment2.frozen:
+                squared_errors_seg2 = segment2.line_segment_params.squared_distances_to_line(relevant_points)
+            else:
+                trim2 = max(0, min(MAX_ORPHANS_PER_JUNCTION,
+                                   points_count(n, right_limit, segment2.last_index) - MIN_SEGMENT_POINTS))
+                squared_errors_seg2 = self._squared_errors_to_core_line(
+                    right_limit, (segment2.last_index - trim2) % n, segment2.line_segment_params, relevant_points)
         else:
             squared_errors_seg1 = segment1.line_segment_params.squared_distances_to_line(relevant_points)
             squared_errors_seg2 = segment2.line_segment_params.squared_distances_to_line(relevant_points)
@@ -477,7 +485,7 @@ class FitterToPointsSequence:
         if not np.isfinite(best_cost):  # no valid cut: keep the current boundary
             return segment1.last_index, segment2.first_index, 0
 
-        if both_fits_within_tolerance:
+        if free_fits_within_tolerance:
             best_i, best_gap = self._best_cut_with_orphans(head_cum, tail_cum, retained1_outside, retained2_outside,
                                                            gapless_cost=best_cost, gapless_i=best_i)
         else:

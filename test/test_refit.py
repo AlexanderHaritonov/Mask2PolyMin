@@ -256,3 +256,50 @@ def test_adjust_segmentation_keeps_a_frozen_line_when_its_junctions_move():
     assert params.squared_distances_to_line(point[None])[0] == pytest.approx(0.0, abs=1e-12)
     segment_points = subsequence(points, segment.first_index, segment.last_index)
     assert params.loss == pytest.approx(frozen_line.squared_distances_to_line(segment_points).sum())
+
+
+@pytest.mark.parametrize("frozen_is_first, other_range, direction, expected_frozen_range", [
+    (True, (20, 29), [0.8 / 4.5, 1.0], (10, 18)),   # x = 11.1 at y = 9: the frozen side gives up (10, 9)
+    (False, (0, 9), [-0.8 / 3.5, 1.0], (12, 19)),   # x = 11.1 at y = 1: the frozen side gives up (10, 1) and the corner (10, 0)
+])
+def test_separation_scores_a_frozen_segment_against_its_own_line(frozen_is_first, other_range, direction, expected_frozen_range):
+    # Side 1 (x = 10, indices 10..19) is frozen to a tilted line, within tolerance on average.
+    # One point near the junction is ~1.08 px from that line and 1 px from the other line, so it leaves the frozen segment.
+    # Scored against the core half (on x = 10), it would stay.
+    # Only the frozen end is checked: the point may join the other segment or become an orphan.
+    points = square_contour(10)
+    moments = SequenceMoments(points)
+    frozen = SequenceSegment(points, 10, 19, fit_range(moments, 10, 19, with_endpoints=False))
+    frozen.freeze([10.3, 4.5], direction)
+    other = SequenceSegment(points, *other_range, fit_range(moments, *other_range, with_endpoints=False))
+
+    fitter = FitterToPointsSequence(config=FitterConfig(tolerance=1.0))
+    fitter._prepare(points, is_closed=True)
+    refit_segment(fitter._moments, frozen, with_endpoints=False)  # as _fit() does first
+
+    if frozen_is_first:
+        new_last, _, _ = fitter._best_consecutive_segments_separation(frozen, other)
+        assert (frozen.first_index, new_last) == expected_frozen_range
+    else:
+        _, new_first, _ = fitter._best_consecutive_segments_separation(other, frozen)
+        assert (new_first, frozen.last_index) == expected_frozen_range
+
+
+def test_separation_allows_orphans_next_to_a_frozen_line_out_of_tolerance():
+    # Side 1 (x = 10, indices 10..19) is frozen to x = 11.5, out of tolerance on average.
+    # Side 2 (y = 10, indices 20..29) is free and fits exactly.
+    # Orphans are still allowed: (10, 7) and (10, 8) become orphans, (10, 9) goes to side 2.
+    # If the frozen line counted, there would be no orphans: (18, 19).
+    points = square_contour(10)
+    moments = SequenceMoments(points)
+    frozen = SequenceSegment(points, 10, 19, fit_range(moments, 10, 19, with_endpoints=False))
+    frozen.freeze([11.5, 0.0], [0.0, 1.0])
+    free = SequenceSegment(points, 20, 29, fit_range(moments, 20, 29, with_endpoints=False))
+
+    fitter = FitterToPointsSequence(config=FitterConfig(tolerance=1.0))
+    fitter._prepare(points, is_closed=True)
+    refit_segment(fitter._moments, frozen, with_endpoints=False)  # as _fit() does first
+    assert frozen.line_segment_params.loss / frozen.points_count() > 1.0
+
+    new_last, new_first, _ = fitter._best_consecutive_segments_separation(frozen, free)
+    assert (new_last, new_first) == (16, 19)
