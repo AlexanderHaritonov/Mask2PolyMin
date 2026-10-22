@@ -2,7 +2,7 @@
 import numpy as np
 import pytest
 
-from mask2polymin.fit_to_points_sequence import FitterToPointsSequence
+from mask2polymin.fit_to_points_sequence import FitterToPointsSequence, FitterConfig
 
 
 L_SHAPE = [[0, 0], [1, 0], [2, 0], [3, 0], [3, 1], [3, 2], [3, 3]]
@@ -55,3 +55,8 @@ def test_too_few_points_raises():
     # closed contour whose only 2 points are the closing duplicate collapses to a single point
     with pytest.raises(ValueError, match="at least 2 points"):
         FitterToPointsSequence().fit(np.array([[1.0, 1.0], [1.0, 1.0]]), is_closed=True)
+
+
+def test_negative_segment_cost_raises():
+    with pytest.raises(ValueError, match="segment_cost must be >= 0"):
+        FitterConfig(segment_cost=-1.0)

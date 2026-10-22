@@ -57,11 +57,17 @@ class FitterConfig:
     ''' Plot the segmentation after every split (requires matplotlib). '''
     plot_intermediate_steps: bool = False
 
+    ''' Cost of one segment in Energy, in units of tolerance².
+    refit() never returns a higher Energy than its start. '''
+    segment_cost: float = 15.0
+
     def __post_init__(self):
         if self.max_segments_count < 1:
             raise ValueError(f"max_segments_count must be >= 1, got {self.max_segments_count}")
         if self.tolerance <= 0:
             raise ValueError(f"tolerance must be > 0, got {self.tolerance}")
+        if self.segment_cost < 0:
+            raise ValueError(f"segment_cost must be >= 0, got {self.segment_cost}")
 
     @property
     def tolerance_sq(self) -> float:
@@ -85,21 +91,33 @@ class FitterToPointsSequence:
         segments = self._merge_collinear_segments(segments_sequence)
         return self._result_with_endpoints(segments)
 
-    def refit(self, points_sequence: np.ndarray, previous: FitResult, is_closed: bool = False) -> FitResult:
+    def refit(self, points_sequence: np.ndarray, previous: FitResult, is_closed: bool = False, *, guard: bool = True) -> FitResult:
         """Fit again, starting from the segmentation in `previous`; `previous` stays intact.
-        points_sequence must be the contour `previous` was fitted to."""
+        points_sequence must be the contour `previous` was fitted to.
+        guard: if the result has a higher energy than `previous`, return the start segmentation instead."""
         self._prepare(points_sequence, is_closed)
         previous_length = len(previous.segments[0].whole_sequence)
         if len(self.whole_sequence) != previous_length:
             raise ValueError(f"points_sequence must be the contour previous was fitted to: got {len(self.whole_sequence)} points "
                              f"(excluding the closing duplicate), previous has {previous_length}")
 
-        segments = [segment.clone() for segment in previous.segments]
-        for segment in segments:
-            segment.whole_sequence = self.whole_sequence
-        segments_sequence = self._fit(segments)
+        segments_sequence = self._fit(self._clones_of(previous.segments))
         segments = self._merge_collinear_segments(segments_sequence)
-        return self._result_with_endpoints(segments)
+        result = self._result_with_endpoints(segments)
+
+        if guard:
+            tolerance, segment_cost = self.config.tolerance, self.config.segment_cost
+            if result.energy(tolerance, segment_cost) > previous.energy(tolerance, segment_cost):
+                if self.config.verbose: print("refit() raised Energy; returning the start segmentation.")
+                return self._result_with_endpoints(self._clones_of(previous.segments))
+        return result
+
+    def _clones_of(self, segments: list[SequenceSegment]) -> list[SequenceSegment]:
+        """Clones that point to the current whole_sequence, so the originals stay intact."""
+        clones = [segment.clone() for segment in segments]
+        for clone in clones:
+            clone.whole_sequence = self.whole_sequence
+        return clones
 
     def _result_with_endpoints(self, segments: list[SequenceSegment]) -> FitResult:
         # During fitting the start and end points of the lines are not computed, because that would need an extra pass over all points.

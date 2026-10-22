@@ -121,6 +121,20 @@ def test_clean_square_has_no_orphans():
     assert result.orphans_count() == 0
 
 
+# ---- energy ----
+
+def test_energy_adds_sse_orphans_and_segments():
+    # tolerance 1.5, so tolerance and tolerance² differ
+    points = zigzag(10)
+    segments = [
+        SequenceSegment(points, 0, 3, make_params([0, 0], [3, 0])),
+        SequenceSegment(points, 5, 7, make_params([5, 0], [7, 0])),
+    ]
+    result = FitResult(np.empty((0, 2)), segments)
+    expected = result.sse() + 1.5 ** 2 * 3 + 15.0 * 1.5 ** 2 * 2
+    assert result.energy(tolerance=1.5, segment_cost=15.0) == pytest.approx(expected)
+
+
 # ---- SequenceSegment.frozen ----
 
 def test_frozen_defaults_to_false_and_clone_copies_it():

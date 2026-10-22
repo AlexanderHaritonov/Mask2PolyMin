@@ -24,3 +24,10 @@ class FitResult(NamedTuple):
             squared_distances = segment.line_segment_params.squared_distances_to_line(points)
             total += float(squared_distances.sum())
         return total
+
+    def energy(self, tolerance: float, segment_cost: float) -> float:
+        """Energy = sse + tolerance² · orphans_count + segment_cost · tolerance² · segments_count.
+        An orphan costs as much as a point at distance tolerance; a segment as much as segment_cost such points.
+        Pass the values from FitterConfig."""
+        tolerance_sq = tolerance * tolerance
+        return self.sse() + tolerance_sq * self.orphans_count() + segment_cost * tolerance_sq * len(self.segments)
