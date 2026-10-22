@@ -2,6 +2,7 @@ import numpy as np
 from dataclasses import dataclass
 
 from mask2polymin.sequence_moments import subsequence, fit_range, refit_segment, SequenceMoments, DEGENERATE_STRAIGHTNESS
+from mask2polymin.energy import orphans_count
 from mask2polymin.fit_result import FitResult
 from mask2polymin.line_segment_params import LineSegmentParams
 from mask2polymin.polyline import segments_to_polyline
@@ -356,9 +357,8 @@ class FitterToPointsSequence:
         if not free_segments:
             return 0.0
         free_assigned_count = sum(s.points_count() for s in free_segments)
-        orphans_count = (len(self.whole_sequence) - sum(s.points_count() for s in segments)
-                         - self._orphans_between_frozen_segments(segments))
-        orphans_penalty = orphans_count * self.config.tolerance_sq / len(free_segments)
+        counted_orphans = orphans_count(segments) - self._orphans_between_frozen_segments(segments)
+        orphans_penalty = counted_orphans * self.config.tolerance_sq / len(free_segments)
         return (sum(s.line_segment_params.loss * s.points_count() for s in free_segments) / free_assigned_count
                 + orphans_penalty)
 

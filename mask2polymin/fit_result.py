@@ -2,6 +2,7 @@ from typing import NamedTuple
 
 import numpy as np
 
+from mask2polymin import energy
 from mask2polymin.sequence_moments import subsequence
 from mask2polymin.sequence_segment import SequenceSegment
 
@@ -13,7 +14,7 @@ class FitResult(NamedTuple):
 
     def orphans_count(self) -> int:
         """Number of contour points assigned to no segment."""
-        return len(self.segments[0].whole_sequence) - sum(s.points_count() for s in self.segments)
+        return energy.orphans_count(self.segments)
 
     def sse(self) -> float:
         """Sum of squared distances from each segment's points to its current line.
@@ -26,8 +27,5 @@ class FitResult(NamedTuple):
         return total
 
     def energy(self, tolerance: float, segment_cost: float) -> float:
-        """Energy = sse + tolerance² · orphans_count + segment_cost · tolerance² · segments_count.
-        An orphan costs as much as a point at distance tolerance; a segment as much as segment_cost such points.
-        Pass the values from FitterConfig."""
-        tolerance_sq = tolerance * tolerance
-        return self.sse() + tolerance_sq * self.orphans_count() + segment_cost * tolerance_sq * len(self.segments)
+        """Energy of this result. Pass the values from FitterConfig."""
+        return energy.energy(self.sse(), self.orphans_count(), len(self.segments), tolerance, segment_cost)
