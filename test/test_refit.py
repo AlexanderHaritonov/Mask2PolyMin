@@ -326,15 +326,6 @@ def test_choose_segment_index_for_split_skips_frozen_segments(frozen_indices, ex
     assert fitter._choose_segment_index_for_split(segments) == expected
 
 
-@pytest.mark.parametrize("frozen_indices, expected", [((), True), ((0,), False)])
-def test_has_severe_local_defect_skips_frozen_segments(frozen_indices, expected):
-    points = square_contour(10)
-    segments = segments_from_ranges(points, CORNER_INSIDE_FIRST_SEGMENT, frozen_indices)
-    fitter = FitterToPointsSequence(config=FitterConfig(tolerance=1.0))
-    fitter._prepare(points, is_closed=True)
-    assert fitter._has_severe_local_defect(segments) == expected
-
-
 @pytest.mark.parametrize("frozen_indices, expected_count", [((), 4), ((0,), 5), ((1,), 5), ((0, 1), 5)])
 def test_merge_collinear_segments_skips_frozen_segments(frozen_indices, expected_count):
     # side 0 is cut into two collinear halves: 0..4 and 5..9

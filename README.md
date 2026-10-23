@@ -67,9 +67,6 @@ The `1.0` floor covers ordinary pixel-quantization jitter present even in a "cle
 **rank_split_by_max_deviation** (default `False`)
 Pass True to slightly improve simpler shapes (low segments count, enough space between opposite sides). Can damage complex shapes.
 
-**apply_local_defect_margin** (default `True`)
-Setting this to False speed up the algorithm by ~30% on complex shapes (~45% on simple) at the cost of an ~11% corner-recall regression on complex ones.
-
 ## Algorithm
 
 The input is an ordered sequence of contour points, open or closed. Lines are fitted by total least squares (minimizing perpendicular distances), and the segmentation is refined top-down:
@@ -77,7 +74,7 @@ The input is an ordered sequence of contour points, open or closed. Lines are fi
 1. **Fit** a single line to the whole sequence.
 2. **Split** the worst-fitting segment at its midpoint — a segment needs splitting when its mean squared deviation exceeds `tolerance²` or any single point lies farther than `tolerance` from its line.
 3. **Adjust**: slide each junction between neighboring segments to the cut with the lowest total squared error, re-fitting the segments as points change sides; a point far from both lines may be left orphaned. Iterate until stable.
-4. **Repeat** 2–3 until the average squared-error sum per segment is within `tolerance²`, a split no longer improves it by at least that much, or `max_segments_count` is reached.
+4. **Repeat** 2–3 until the average squared-error sum per segment is within `tolerance²`, a split no longer lowers the Energy, or `max_segments_count` is reached.
 5. **Merge** adjacent segments whose combined points still fit a single line within tolerance.
 6. **Reconstruct vertices**: each corner is the intersection of the two adjacent fitted lines — sub-pixel accurate even when no input point lies at the true corner.
 

@@ -19,10 +19,6 @@ MIN_POINTS_FOR_DIRECTION = 5
 they still have to pass the actual fit-quality check to merge for real '''
 COLLINEAR_DIRECTIONS_MIN_DOT = 0.9
 
-''' A point's deviation must clear tolerance by this much (in squared-distance units) before  the no-improvement stop defers to it.
-Lower values favor recall (and, for complex shapes, precision too) at the cost of wall time. '''
-LOCAL_DEFECT_MARGIN = 2.5
-
 ''' Cap on adjust_segmentation's boundary-refinement passes per split. '''
 MAX_ADJUST_ITERATIONS = 20
 
@@ -41,17 +37,13 @@ class FitterConfig:
     # tolerance_sq gates everything:
     #   - split eligibility and collinear merge: a segment's mean and max squared point distance must stay within it;
     #   - global stop: the average SSE per segment must stay within it, i.e. each segment gets a budget of ~one tolerance-sized outlier;
-    #   - improvement: each split must reduce that SSE by at least one  outlier's worth, else the fitter gives up.
+    #   - Energy: an orphan costs tolerance_sq and a segment segment_cost · tolerance_sq.
     #
     tolerance: float = 1.0
 
     ''' When several segments are simultaneously eligible for the next split, rank by each segment's single worst point instead of its mean loss.
     Slightly improves simple shapes reconstruction, but can damage complex shapes. '''
     rank_split_by_max_deviation: bool = False
-
-    ''' Set this to False to speed up the algorithm by ~30% on complex shapes (~45% on simple)
-    at the cost of an ~11% corner-recall regression on complex shapes -- simple-shape recall is essentially unaffected, and its precision actually improves. Measured via performance_test/defect_margin_ab.py. '''
-    apply_local_defect_margin: bool = True
 
     verbose: bool = False
 
@@ -193,35 +185,11 @@ class FitterToPointsSequence:
                 if self.config.verbose: print(f"Breaking up at {len(segmentation_after_split)} because sse per segment is within tolerance.")
                 return segmentation_after_split
 
-            if new_sse_per_segment > sse_per_segment - self.config.tolerance_sq:
-                no_severe_local_defect = not self._has_severe_local_defect(segmentation_after_split)
-                if no_severe_local_defect:
-                    if self.config.verbose: print("Breaking up because of no improvement at", len(segments), "segments.")
-                    return segments
-                elif self.config.verbose:
-                    print(f"No global improvement at {len(segmentation_after_split)} segments, but a severe local defect remains; continuing.")
-
             segments = segmentation_after_split
-            sse_per_segment = new_sse_per_segment
 
     def _energy(self, segments: list[SequenceSegment]) -> float:
         sse = sum(segment_sse(segment) for segment in segments)
         return energy(sse, orphans_count(segments), len(segments), self.config.tolerance, self.config.segment_cost)
-
-    def _has_severe_local_defect(self, segments: list[SequenceSegment]) -> bool:
-        """Whether any segment has a point deviating enough to be a real unresolved feature rather than pixel-quantization jitter (see LOCAL_DEFECT_MARGIN)."""
-
-        if not self.config.apply_local_defect_margin:
-            return False
-        
-        threshold = LOCAL_DEFECT_MARGIN * self.config.tolerance_sq
-        for segment in segments:
-            if segment.frozen or segment.points_count() <= 3:
-                continue
-            points = subsequence(self.whole_sequence, segment.first_index, segment.last_index)
-            if segment.line_segment_params.squared_distances_to_line(points).max() > threshold:
-                return True
-        return False
 
     def _merge_collinear_segments(self, segments: list[SequenceSegment]) -> list[SequenceSegment]:
         # We go once through the pairs of neighboring segments.
