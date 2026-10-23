@@ -37,7 +37,7 @@ Optional reviews: `--preview` (per-family renders),
 ## 2. Benchmark sweep
 
 ```bash
-python run_benchmark.py            # ~10 min; --limit N for a quick smoke pass
+python run_benchmark.py            # -limit N for a quick smoke pass
 ```
 
 Produces `summarized_csvs/raw.csv` (gitignored): 3900 rows = 1950 contours × 2 algorithms, one row per run.
@@ -90,6 +90,18 @@ Unlike section 3's aggregate-of-medians view, this pairs rdp and mask2polymin on
 line for the mean/median comparison value (mask2polymin vs. RDP, positive = mask2polymin
 better) and bars for how many contours it won, both against noise level. Design
 rationale: [Comparison_Charts_Plan.md](Comparison_Charts_Plan.md).
+
+## 5. Compare two runs (before and after a fitter change)
+
+`run_benchmark.py` overwrites `raw.csv`, so copy it first, e.g. to `summarized_csvs/raw_before.csv`. Then:
+
+```bash
+python compare_raw.py summarized_csvs/raw_before.csv summarized_csvs/raw.csv
+```
+
+[compare_raw.py](compare_raw.py) pairs the mask2polymin rows of both runs by `contour_id` and prints the means as "before → after",
+per noise level × shape class and per contour size × shape class,
+then for `corner_recall` and `corner_loc_err` per size how many contours got better, stayed the same or got worse.
 
 ## Metrics
 
