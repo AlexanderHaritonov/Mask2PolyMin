@@ -2,7 +2,7 @@ import numpy as np
 from dataclasses import dataclass
 
 from mask2polymin.sequence_moments import subsequence, fit_range, refit_segment, SequenceMoments, DEGENERATE_STRAIGHTNESS
-from mask2polymin.energy import orphans_count, segment_sse
+from mask2polymin.energy import energy, orphans_count, segment_sse
 from mask2polymin.fit_result import FitResult
 from mask2polymin.line_segment_params import LineSegmentParams
 from mask2polymin.polyline import segments_to_polyline
@@ -60,7 +60,7 @@ class FitterConfig:
 
     ''' Cost of one segment in Energy, in units of tolerance².
     refit() never returns a higher Energy than its start. '''
-    segment_cost: float = 15.0
+    segment_cost: float = 2.0
 
     def __post_init__(self):
         if self.max_segments_count < 1:
@@ -157,8 +157,8 @@ class FitterToPointsSequence:
             if segment.frozen:
                 refit_segment(self._moments, segment, with_endpoints=False)
                 
-        # A frozen line may have moved, so the junctions are adjusted first. Otherwise they would move only after a split.
-        if any(segment.frozen for segment in segments):
+        # A frozen line may have moved, or the junctions may be misplaced, so the junctions are adjusted first. Otherwise they would move only after a split.
+        if len(segments) > 1:
             sse_per_segment = self._adjust_segmentation(segments, 0)
         else:
             sse_per_segment = self._sse_per_segment(segments)
@@ -185,6 +185,10 @@ class FitterToPointsSequence:
                 from mask2polymin.plotting import plot_segments
                 plot_segments(segmentation_after_split)
 
+            if self._energy(segmentation_after_split) >= self._energy(segments):
+                if self.config.verbose: print("Breaking up because the split does not lower the energy at", len(segments), "segments.")
+                return segments
+
             if new_sse_per_segment < self.config.tolerance_sq:
                 if self.config.verbose: print(f"Breaking up at {len(segmentation_after_split)} because sse per segment is within tolerance.")
                 return segmentation_after_split
@@ -199,6 +203,10 @@ class FitterToPointsSequence:
 
             segments = segmentation_after_split
             sse_per_segment = new_sse_per_segment
+
+    def _energy(self, segments: list[SequenceSegment]) -> float:
+        sse = sum(segment_sse(segment) for segment in segments)
+        return energy(sse, orphans_count(segments), len(segments), self.config.tolerance, self.config.segment_cost)
 
     def _has_severe_local_defect(self, segments: list[SequenceSegment]) -> bool:
         """Whether any segment has a point deviating enough to be a real unresolved feature rather than pixel-quantization jitter (see LOCAL_DEFECT_MARGIN)."""
