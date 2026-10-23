@@ -16,14 +16,14 @@ so direction-based shortcuts must not trust it. '''
 MIN_POINTS_FOR_DIRECTION = 5
 
 ''' cos(~25°): try merge segments whose direction dot product is above this.
-they still have to pass the actual fit-quality check to merge for real '''
+they still have to lower the Energy to merge for real '''
 COLLINEAR_DIRECTIONS_MIN_DOT = 0.9
 
 ''' Cap on adjust_segmentation's boundary-refinement passes per split. '''
 MAX_ADJUST_ITERATIONS = 20
 
-''' Max points per junction that may be left orphaned (assigned to no segment);
-orphaning is data-driven: a point is orphaned iff farther than tolerance from both adjacent lines. '''
+''' Max points per junction that may be left orphaned (assigned to no segment).
+A point farther than tolerance from both adjacent lines is proposed as an orphan; it becomes one only if Energy drops. '''
 MAX_ORPHANS_PER_JUNCTION = 2
 
 @dataclass
@@ -217,16 +217,12 @@ class FitterToPointsSequence:
                 if directions_diverge:
                     i += 1
                     continue
-            combined = subsequence(self.whole_sequence, a.first_index, b.last_index)
-            combined_fit = fit_range(self._moments, a.first_index, b.last_index, with_endpoints=False)
-            both_sides_collinear_on_average = combined_fit.loss / len(combined) <= self.config.tolerance_sq
-            no_point_off = combined_fit.squared_distances_to_line(combined).max() <= self.config.tolerance_sq
             merged = SequenceSegment(
                 whole_sequence=self.whole_sequence,
                 first_index=a.first_index,
                 last_index=b.last_index,
-                line_segment_params=combined_fit)
-            if both_sides_collinear_on_average and no_point_off and self._merge_lowers_energy(a, b, merged):
+                line_segment_params=fit_range(self._moments, a.first_index, b.last_index, with_endpoints=False))
+            if self._merge_lowers_energy(a, b, merged):
                 # do the merge
                 if self.config.verbose:
                     print(f"Merged segments {i} and {(i+1) % n}")
@@ -288,7 +284,7 @@ class FitterToPointsSequence:
 
     def _squared_errors_to_core_line(self, core_first, core_last, fallback: LineSegmentParams, points) -> np.ndarray:
         """Squared distances of `points` to the TLS line of a segment's uncontested core [core_first..core_last].
-          Scoring against the core — never against a line fitted with the contested points themselves — prevents a junction outlier from masking itself by dragging its own segment's fit.
+          Scoring against the core — never against a line fitted with the contested points themselves — keeps a junction outlier from masking itself by dragging its own segment's fit.
           Falls back to the segment's current line when the core is too small to define one."""
         if core_first == core_last:  # a single point cannot define a line
             return fallback.squared_distances_to_line(points)
@@ -446,7 +442,8 @@ class FitterToPointsSequence:
         the shift is how many positions the junction moved (max over its two ends).
         The contested window (that is range of points that can change segment they belong to) is scored against each segment's uncontested core-half line,
         so a junction outlier cannot vouch for itself through its own segment's fit.
-        Orphaning a point costs tolerance_sq, so a point is orphaned iff it lies farther than tolerance from both lines."""
+        Orphaning a point costs tolerance_sq, so a point farther than tolerance from both lines is proposed as an orphan.
+        _adjust_segmentation() keeps the move only if Energy drops."""
 
         n = len(self.whole_sequence)
         assert (segment2.first_index - segment1.last_index - 1) % n <= MAX_ORPHANS_PER_JUNCTION

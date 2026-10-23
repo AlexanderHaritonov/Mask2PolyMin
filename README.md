@@ -73,16 +73,16 @@ The input is an ordered sequence of contour points, open or closed. Lines are fi
 
 1. **Fit** a single line to the whole sequence.
 2. **Split** the worst-fitting segment at its midpoint — a segment needs splitting when its mean squared deviation exceeds `tolerance²` or any single point lies farther than `tolerance` from its line.
-3. **Adjust**: slide each junction between neighboring segments to the cut with the lowest total squared error, re-fitting the segments as points change sides; a point far from both lines may be left orphaned. Iterate until stable.
+3. **Adjust**: slide each junction between neighboring segments to the cut with the lowest total squared error, re-fitting the segments as points change sides; a point far from both lines may be left orphaned. A move is kept only if it lowers the Energy. Iterate until stable.
 4. **Repeat** 2–3 until the average squared-error sum per segment is within `tolerance²`, a split no longer lowers the Energy, or `max_segments_count` is reached.
-5. **Merge** adjacent segments whose combined points still fit a single line within tolerance.
+5. **Merge** adjacent segments with similar directions when this lowers the Energy.
 6. **Reconstruct vertices**: each corner is the intersection of the two adjacent fitted lines — sub-pixel accurate even when no input point lies at the true corner.
 
 Thanks to precomputed cumulative moments of the sequence, fitting a line to any contiguous point range is O(1).
 
 ### Orphaned junction points
 A junction point — where one fitted segment ends and the next begins — is often an outlier to one or both segments, and in a least-squares fit an outlier at the segment's end has disproportionately large influence. A single misplaced pixel can rotate the fitted line and drag the reconstructed vertex.
-Mask2PolyMin therefore may leave up to 2 points at each junction *orphaned* — assigned to no segment: a point is orphaned iff it lies farther than `tolerance` from both adjacent lines, and the orphans' mean then anchors the corner reconstruction.
+Mask2PolyMin therefore may leave up to 2 points at each junction *orphaned* — assigned to no segment: a point farther than `tolerance` from both adjacent lines becomes an orphan when this lowers the Energy, and the orphans' mean then anchors the corner reconstruction.
 
 ## Input conventions
 
