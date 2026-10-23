@@ -2,7 +2,7 @@ import numpy as np
 from dataclasses import dataclass
 
 from mask2polymin.sequence_moments import subsequence, fit_range, refit_segment, SequenceMoments, DEGENERATE_STRAIGHTNESS
-from mask2polymin.energy import orphans_count
+from mask2polymin.energy import orphans_count, segment_sse
 from mask2polymin.fit_result import FitResult
 from mask2polymin.line_segment_params import LineSegmentParams
 from mask2polymin.polyline import segments_to_polyline
@@ -378,6 +378,13 @@ class FitterToPointsSequence:
         # Remember the state and skip the re-scoring.
         junction_last_scored_state = [None] * len(segments)
 
+        # A junction moves only if the energy of its two segments and its orphans drops.
+        n = len(self.whole_sequence)
+
+        def junction_energy(previous_segment, next_segment) -> float:
+            orphans = (next_segment.first_index - previous_segment.last_index - 1) % n
+            return segment_sse(previous_segment) + segment_sse(next_segment) + orphans * self.config.tolerance_sq
+
         def find_optimal_break_and_adjust(junction_index, previous_segment, next_segment) -> int:
             if previous_segment.frozen and next_segment.frozen:
                 return 0
@@ -388,6 +395,9 @@ class FitterToPointsSequence:
             junction_last_scored_state[junction_index] = state
             new_last, new_first, boundary_shift = self._best_consecutive_segments_separation(previous_segment, next_segment)
             if boundary_shift > 0:
+                start = (previous_segment.last_index, previous_segment.line_segment_params,
+                         next_segment.first_index, next_segment.line_segment_params)
+                start_energy = junction_energy(previous_segment, next_segment)
                 prev_changed = new_last != previous_segment.last_index
                 next_changed = new_first != next_segment.first_index
                 previous_segment.last_index = new_last
@@ -396,6 +406,10 @@ class FitterToPointsSequence:
                     refit_segment(self._moments, previous_segment, with_endpoints=False)
                 if next_changed:
                     refit_segment(self._moments, next_segment, with_endpoints=False)
+                if junction_energy(previous_segment, next_segment) >= start_energy:
+                    (previous_segment.last_index, previous_segment.line_segment_params,
+                     next_segment.first_index, next_segment.line_segment_params) = start
+                    return 0
 
             return boundary_shift
 

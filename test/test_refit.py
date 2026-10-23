@@ -457,8 +457,8 @@ def test_refit_never_raises_the_energy(seed, is_closed, frozen_shift):
 
 
 def test_guard_returns_the_start_when_refit_raises_the_energy():
-    # Seed 30: refit() of fit()'s result splits once more (4 -> 5 segments) and raises Energy.
-    points = noisy_rectangle_contour(np.random.default_rng(30), sigma=0.7)
+    # Seed 32: refit() of fit()'s result splits twice more (4 -> 6 segments) and raises Energy.
+    points = noisy_rectangle_contour(np.random.default_rng(32), sigma=0.7)
     config = FitterConfig(tolerance=1.0)
     fitter = FitterToPointsSequence(config=config)
     fitted = fitter.fit(points, is_closed=True)
@@ -468,8 +468,30 @@ def test_guard_returns_the_start_when_refit_raises_the_energy():
 
     # without the guard: the fitter's result, with the higher Energy
     assert energy(unguarded, config) > energy(fitted, config)
-    assert len(unguarded.segments) == 5
+    assert len(unguarded.segments) == 6
     # with the guard: the start, as new segments
     assert index_ranges(guarded.segments) == index_ranges(fitted.segments)
     assert energy(guarded, config) == pytest.approx(energy(fitted, config))
     assert not any(g is f for g in guarded.segments for f in fitted.segments)
+
+
+# ---- E decides ----
+
+@pytest.mark.parametrize("frozen_shift", [None, 0.5])
+@pytest.mark.parametrize("is_closed", [True, False])
+@pytest.mark.parametrize("seed", range(40))
+def test_adjust_segmentation_never_raises_the_energy(seed, is_closed, frozen_shift):
+    # With frozen_shift, every other segment is frozen to its line, moved by that much.
+    rng = np.random.default_rng(seed)
+    points = noisy_rectangle_contour(rng, sigma=0.7) if is_closed else noisy_l_shape(rng, sigma=0.7)
+    config = FitterConfig(tolerance=1.0)
+    fitter = FitterToPointsSequence(config=config)
+    segments = fitter.fit(points, is_closed=is_closed).segments
+    if frozen_shift is not None:
+        for segment in segments[::2]:
+            freeze_shifted(segment, frozen_shift)
+            refit_segment(fitter._moments, segment, with_endpoints=False)  # as _fit() does first
+    start = energy(FitResult(np.empty((0, 2)), segments), config)
+
+    fitter._adjust_segmentation(segments, 0)
+    assert energy(FitResult(np.empty((0, 2)), segments), config) <= start + 1e-9
