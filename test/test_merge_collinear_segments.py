@@ -1,7 +1,8 @@
 import numpy as np
+import pytest
 from mask2polymin.sequence_segment import SequenceSegment
 from mask2polymin.sequence_moments import fit_range
-from mask2polymin.fit_to_points_sequence import FitterToPointsSequence
+from mask2polymin.fit_to_points_sequence import FitterToPointsSequence, FitterConfig
 
 
 def make_segment(fitter, first, last):
@@ -142,6 +143,23 @@ def test_short_stub_with_noisy_direction_still_merges():
     assert len(result) == 1
     assert result[0].first_index == 0
     assert result[0].last_index == 9
+
+
+@pytest.mark.parametrize("segment_cost, expected_count", [(15.0, 2), (30.0, 1)])
+def test_merges_only_if_the_energy_drops(segment_cost, expected_count):
+    # Two exact 50-point halves, the second at 4°: the merged line is within tolerance (max 0.76, mean 0.25),
+    # but adds 25.4 to the SSE. So the merge saves a segment only when it costs more than that.
+    half = np.arange(50.0)
+    first = np.stack([half, np.zeros(50)], axis=1)
+    second = np.stack([50 + half, (half + 1) * np.tan(np.radians(4))], axis=1)
+    seq = np.vstack([first, second])
+    fitter = FitterToPointsSequence(config=FitterConfig(tolerance=1.0, segment_cost=segment_cost))
+    fitter._prepare(seq)
+    segments = make_segments(fitter, [(0, 49), (50, 99)])
+
+    result = fitter._merge_collinear_segments(segments)
+
+    assert len(result) == expected_count
 
 
 def test_open_sequence_never_merges_across_the_ends():

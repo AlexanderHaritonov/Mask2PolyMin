@@ -245,13 +245,13 @@ class FitterToPointsSequence:
             combined_fit = fit_range(self._moments, a.first_index, b.last_index, with_endpoints=False)
             both_sides_collinear_on_average = combined_fit.loss / len(combined) <= self.config.tolerance_sq
             no_point_off = combined_fit.squared_distances_to_line(combined).max() <= self.config.tolerance_sq
-            if both_sides_collinear_on_average and no_point_off:
+            merged = SequenceSegment(
+                whole_sequence=self.whole_sequence,
+                first_index=a.first_index,
+                last_index=b.last_index,
+                line_segment_params=combined_fit)
+            if both_sides_collinear_on_average and no_point_off and self._merge_lowers_energy(a, b, merged):
                 # do the merge
-                merged = SequenceSegment(
-                    whole_sequence=self.whole_sequence,
-                    first_index=a.first_index,
-                    last_index=b.last_index,
-                    line_segment_params=combined_fit)
                 if self.config.verbose:
                     print(f"Merged segments {i} and {(i+1) % n}")
                 if self.is_closed and i == n - 1:
@@ -267,6 +267,12 @@ class FitterToPointsSequence:
             else:
                 i += 1
         return segments
+
+    def _merge_lowers_energy(self, a: SequenceSegment, b: SequenceSegment, merged: SequenceSegment) -> bool:
+        # A merge saves one segment's cost and the orphans between a and b, which the merged segment takes in.
+        orphans = (b.first_index - a.last_index - 1) % len(self.whole_sequence)
+        saved = self.config.segment_cost * self.config.tolerance_sq + orphans * self.config.tolerance_sq
+        return segment_sse(merged) < segment_sse(a) + segment_sse(b) + saved
 
     def _choose_segment_index_for_split(self, segments: list[SequenceSegment]) -> int | None:
         def needs_split(segment: SequenceSegment) -> bool:
