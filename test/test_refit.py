@@ -428,12 +428,13 @@ def energy(result, config):
     return result.energy(config.tolerance, config.segment_cost)
 
 
+@pytest.mark.parametrize("guard", [True, False])
 @pytest.mark.parametrize("frozen_shift", [None, 0.5])
 @pytest.mark.parametrize("is_closed", [True, False])
 @pytest.mark.parametrize("seed", range(40))
-def test_refit_never_raises_the_energy(seed, is_closed, frozen_shift):
-    # sigma 0.7: without the guard, refit() raises Energy in about 10% of these cases.
-    # With frozen_shift, every other segment is frozen to its line, moved by that much.
+def test_refit_never_raises_the_energy(seed, is_closed, frozen_shift, guard):
+    # sigma 0.7. With frozen_shift, every other segment is frozen to its line, moved by that much.
+    # Without the guard too: E decides every split, merge and junction move.
     rng = np.random.default_rng(seed)
     points = noisy_rectangle_contour(rng, sigma=0.7) if is_closed else noisy_l_shape(rng, sigma=0.7)
     config = FitterConfig(tolerance=1.0)
@@ -443,23 +444,24 @@ def test_refit_never_raises_the_energy(seed, is_closed, frozen_shift):
         for segment in previous.segments[::2]:
             freeze_shifted(segment, frozen_shift)
 
-    result = fitter.refit(points, previous, is_closed=is_closed)
+    result = fitter.refit(points, previous, is_closed=is_closed, guard=guard)
     assert energy(result, config) <= energy(previous, config) + 1e-9
 
 
-def test_guard_returns_the_start_when_refit_raises_the_energy():
-    # Seed 32: refit() of fit()'s result splits twice more (4 -> 6 segments) and raises Energy.
-    points = noisy_rectangle_contour(np.random.default_rng(32), sigma=0.7)
+def test_guard_returns_the_start_when_refit_raises_the_energy(monkeypatch):
+    # _fit() returns the 4 sides with every junction 3 points past its corner.
+    points = square_contour(10)
     config = FitterConfig(tolerance=1.0)
     fitter = FitterToPointsSequence(config=config)
     fitted = fitter.fit(points, is_closed=True)
+    monkeypatch.setattr(fitter, "_fit", lambda segments: misplaced_junctions(points, side=10, shift=3))
 
     unguarded = fitter.refit(points, fitted, is_closed=True, guard=False)
     guarded = fitter.refit(points, fitted, is_closed=True)
 
-    # without the guard: the fitter's result, with the higher Energy
+    # without the guard: the patched result, with the higher Energy
     assert energy(unguarded, config) > energy(fitted, config)
-    assert len(unguarded.segments) == 6
+    assert index_ranges(unguarded.segments) == index_ranges(misplaced_junctions(points, side=10, shift=3))
     # with the guard: the start, as new segments
     assert index_ranges(guarded.segments) == index_ranges(fitted.segments)
     assert energy(guarded, config) == pytest.approx(energy(fitted, config))
