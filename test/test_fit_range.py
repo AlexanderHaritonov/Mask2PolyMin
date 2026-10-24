@@ -138,13 +138,11 @@ def test_fit_range_to_line_matches_direct_computation(first, last):
 
 
 def test_fit_range_to_line_on_the_tls_line_matches_fit_range():
-    # fit_range scales its loss by count/(count-1); fit_range_to_line does not
     fitter = random_walk_fitter(seed=5)
     fitted = fit_range(fitter._moments, 4, 30, with_endpoints=True)
     kept = fit_range_to_line(fitter._moments, 4, 30, fitted, with_endpoints=True)
 
-    count = 27
-    assert kept.loss == pytest.approx(fitted.loss * (count - 1) / count, rel=1e-9)
+    assert kept.loss == pytest.approx(fitted.loss, rel=1e-9)
     assert kept.straightness == pytest.approx(fitted.straightness, rel=1e-9)
     np.testing.assert_allclose(kept.start_point, fitted.start_point, atol=1e-9)
     np.testing.assert_allclose(kept.end_point, fitted.end_point, atol=1e-9)

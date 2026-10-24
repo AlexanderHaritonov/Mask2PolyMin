@@ -8,13 +8,8 @@ def orphans_count(segments: list[SequenceSegment]) -> int:
 
 
 def segment_sse(segment: SequenceSegment) -> float:
-    """Sum of squared distances from the segment's points to its line, from its loss in constant time.
-    fit_range() scales a free segment's loss by n/(n−1)."""
-    loss = segment.line_segment_params.loss
-    if segment.frozen:
-        return loss
-    n = segment.points_count()
-    return loss * (n - 1) / n
+    """Sum of squared distances from the segment's points to its line: its loss, for free and frozen segments."""
+    return segment.line_segment_params.loss
 
 
 def energy(sse: float, orphans_count: int, segments_count: int, tolerance: float, segment_cost: float) -> float:

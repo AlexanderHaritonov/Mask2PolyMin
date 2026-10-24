@@ -89,8 +89,8 @@ def test_sse_after_fit_matches_segment_losses():
     pts = square_contour(corner_displacement=1.5)
     result = FitterToPointsSequence(config=FitterConfig(tolerance=1.0)).fit(pts, is_closed=True)
 
-    # loss is n * eig_min scaled by n / (n - 1); undo the scaling to get the SSE to the TLS line
-    expected = sum(s.line_segment_params.loss * (s.points_count() - 1) / s.points_count() for s in result.segments)
+    # loss is n * eig_min, the SSE to the TLS line
+    expected = sum(s.line_segment_params.loss for s in result.segments)
     assert result.sse() == pytest.approx(expected)
 
 

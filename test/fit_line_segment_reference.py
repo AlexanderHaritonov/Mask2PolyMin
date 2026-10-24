@@ -24,7 +24,7 @@ def fit_line_segment(points: np.ndarray) -> LineSegmentParams:
     # Ensure float64 computations without copying large points array
     centroid = np.asarray(points.mean(axis=0), dtype=np.float64)
     diffs = points - centroid
-    cov = np.cov(diffs, rowvar=False)
+    cov = np.cov(diffs, rowvar=False, ddof=0)
 
     eigvals, eigvecs = np.linalg.eigh(cov)
 

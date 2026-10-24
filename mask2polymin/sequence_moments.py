@@ -72,10 +72,9 @@ def fit_range(moments: SequenceMoments, first_index: int, last_index: int, with_
             loss=0.0,
             straightness=DEGENERATE_STRAIGHTNESS)
 
-    # principal_axis eigenvalues come from the population covariance (divide by count);
-    # fit_line_segment's come from np.cov's sample covariance (ddof=1, divide by count-1).
-    # Scale to keep loss/straightness conventions identical.
-    loss = count * max(eig_min, 0.0) * count / (count - 1)
+    # principal_axis eigenvalues come from the population covariance (divide by count),
+    # so count * eig_min is the plain sum of squared distances to the TLS line.
+    loss = count * max(eig_min, 0.0)
     straightness = float(eig_min / eig_max)
 
     if not with_endpoints:
