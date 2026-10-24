@@ -2,6 +2,17 @@
 
 All notable changes to this project are documented here.
 
+## [Unreleased]
+
+### Changed
+- **Breaking:** `FitterConfig.apply_local_defect_margin` removed.
+- `fit()` results change: a split, merge or junction move is kept only if it lowers the Energy (see `segment_cost` in the README).
+  On the benchmark (1950 contours): corner recall 0.522 → 0.551, Hausdorff 4.57 → 4.30, RMS 1.35 → 1.30, wall time 63 → 12 ms per contour.
+- `loss` of a fitted line is the plain sum of squared distances; it was scaled by n/(n−1).
+
+### Added
+- `FitterConfig.segment_cost` (default `2`): the cost of one segment in the Energy, in units of `tolerance²`.
+
 ## [0.2.0] - 2026-07-26
 
 ### Changed

@@ -64,6 +64,10 @@ python example_usage.py
 **rule of thumb:** `tolerance ≈ max(1.0, jitter_amp)`, where `jitter_amp` how noisy the segmentation is - the standard deviation of how far the mask's boundary randomly wanders from its true edge.
 The `1.0` floor covers ordinary pixel-quantization jitter present even in a "clean" mask.
 
+**segment_cost** (default `2`): the cost of one segment, in units of `tolerance²`. A split, merge or junction move is kept only if it lowers the Energy:\
+`Energy = SSE + tolerance² · orphans_count + segment_cost · tolerance² · segments_count`\
+An orphan costs as much as a point at distance `tolerance`. Higher values give fewer segments.
+
 **rank_split_by_max_deviation** (default `False`)
 Pass True to slightly improve simpler shapes (low segments count, enough space between opposite sides). Can damage complex shapes.
 
@@ -109,7 +113,7 @@ Notes for the two common contour sources:
 The implementation is optimized, uses NumPy broadcasting.
 
 Benchmarked against RDP (`cv2.approxPolyDP`) on synthetic shapes across noise levels
-([performance_test/](performance_test/)): comparable on most fidelity metrics (IoU, RMS, Hausdorff). But Mask2PolyMin avoids corner-cutting bias — see [corner_bias](performance_test/charts/fig6_corner_bias.png), [corner_bias comparison](performance_test/charts/comparison_corner_bias.png) and perimeter shrinkage in [perimeter_ratio](performance_test/charts/fig8_perimeter.png), [perimeter_ratio comparison](performance_test/charts/comparison_perimeter.png). Tradeoff: Mask2PolyMin is far slower — although not dramatically slow in absolute terms: 63 ms per contour on average, even on a weak laptop (Intel i5-12450H, UHD Graphics), single-threaded — see [wall-clock time](performance_test/charts/fig11_walltime.png).
+([performance_test/](performance_test/)): comparable on most fidelity metrics (IoU, RMS, Hausdorff). But Mask2PolyMin avoids corner-cutting bias — see [corner_bias](performance_test/charts/fig6_corner_bias.png), [corner_bias comparison](performance_test/charts/comparison_corner_bias.png) and perimeter shrinkage in [perimeter_ratio](performance_test/charts/fig8_perimeter.png), [perimeter_ratio comparison](performance_test/charts/comparison_perimeter.png). Tradeoff: Mask2PolyMin is far slower — although not dramatically slow in absolute terms: 12 ms per contour on average, even on a weak laptop (Intel i5-12450H, UHD Graphics), single-threaded — see [wall-clock time](performance_test/charts/fig11_walltime.png).
 
 <img src="https://raw.githubusercontent.com/AlexanderHaritonov/Mask2PolyMin/main/docs/collage_noise3_fitted.png" alt="10 synthetic shapes at noise level 3 with fitted polygons" width="800">
 
@@ -122,7 +126,7 @@ Benchmarked against RDP (`cv2.approxPolyDP`) on synthetic shapes across noise le
   ```
   - starts from `previous.segments`.
   - a segment marked `frozen = True`, with its line set by the caller is never refitted, split or merged — only its junctions slide.
-  - probable energy for the outer loop: ```E = Σ_faces Σ_segments sse  +  tolerance² · orphans_count  +  λ · segments_count, λ ≈ 15 · tolerance²```
+  - energy for the outer loop: the sum of the faces' Energies.
 
 - explore line fitting with Theil–Sen and respectively the Median or Mean Absolute Error as stop criterion ?
 

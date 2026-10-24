@@ -35,7 +35,7 @@ class FitterConfig:
     - the standard deviation of how far the mask's boundary randomly wanders from its true edge.
     The 1.0 floor covers ordinary pixel-quantization jitter present even in a "clean" mask. '''
     # tolerance_sq gates everything:
-    #   - split eligibility and collinear merge: a segment's mean and max squared point distance must stay within it;
+    #   - split eligibility: a segment is split when its mean or max squared point distance exceeds it;
     #   - global stop: the average SSE per segment must stay within it, i.e. each segment gets a budget of ~one tolerance-sized outlier;
     #   - Energy: an orphan costs tolerance_sq and a segment segment_cost · tolerance_sq.
     #
@@ -50,7 +50,9 @@ class FitterConfig:
     ''' Plot the segmentation after every split (requires matplotlib). '''
     plot_intermediate_steps: bool = False
 
-    ''' Cost of one segment in Energy, in units of tolerance².
+    ''' Cost of one segment in the Energy, in units of tolerance². Higher values give fewer segments.
+    Energy = SSE + tolerance² · orphans_count + segment_cost · tolerance² · segments_count.
+    fit() and refit() keep a split, merge or junction move only if it lowers the Energy.
     refit() never returns a higher Energy than its start. '''
     segment_cost: float = 2.0
 
