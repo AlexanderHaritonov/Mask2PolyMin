@@ -26,7 +26,7 @@ polygon, segments = Fitter().fit(contour)
 Useful for post‑processing bitmask segmentation outputs from models such as MaskRCNN or YOLO‑Seg, especially when regular or low‑complexity shapes are required:
 - obtaining simple geometric representations
 - to reconstruct artificial objects that consist of straight edges, sharp corners, and regular geometric properties.
-- use as the inner step of an energy minimization over neighboring faces (topological maps / B-rep) — see [`refit()`](#refit-fit-again-with-frozen-lines)
+- use as the inner step of an energy minimization over neighboring faces (topological maps / B-rep) — see [`refit()`](#refit-inner-step-of-an-energy-minimization-over-neighboring-faces)
 
 Unlike common point‑thinning algorithms (Ramer–Douglas–Peucker, Visvalingam–Whyatt, Zhang–Suen), this method:
 - minimizes segment count while preserving the raw shape
