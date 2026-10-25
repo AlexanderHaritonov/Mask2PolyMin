@@ -18,6 +18,12 @@ def test_subsequence_linear_wrap_and_single_point():
     np.testing.assert_array_equal(subsequence(POINTS, 3, 3), POINTS[3:4])
 
 
+def test_segment_points_linear_wrap_and_single_point():
+    np.testing.assert_array_equal(SequenceSegment(POINTS, 2, 5).points(), POINTS[2:6])
+    np.testing.assert_array_equal(SequenceSegment(POINTS, 6, 1).points(), np.vstack([POINTS[6:], POINTS[:2]]))
+    np.testing.assert_array_equal(SequenceSegment(POINTS, 3, 3).points(), POINTS[3:4])
+
+
 def test_points_count_linear_wrap_and_single_point():
     assert SequenceSegment(POINTS, 2, 5).points_count() == 4
     assert SequenceSegment(POINTS, 6, 1).points_count() == 4

@@ -3,7 +3,7 @@ import math
 import numpy as np
 
 from mask2polymin.line_segment_params import LineSegmentParams
-from mask2polymin.sequence_segment import SequenceSegment
+from mask2polymin.sequence_segment import SequenceSegment, subsequence
 
 # Sentinel straightness of a degenerate fit (identical points): the direction is meaningless.
 DEGENERATE_STRAIGHTNESS = 1.0
@@ -17,15 +17,6 @@ def principal_axis(cov_xx: float, cov_yy: float, cov_xy: float) -> tuple[np.ndar
     angle = 0.5 * math.atan2(2.0 * cov_xy, cov_xx - cov_yy)
     direction = np.array([math.cos(angle), math.sin(angle)])
     return direction, half_trace + radius, half_trace - radius
-
-
-def subsequence(sequence: np.ndarray, left, right) -> np.ndarray:
-    # Range convention: left <= right is the linear range [left..right] (equal indices = a single point),
-    # left > right wraps past the end; the full circle is [0..n-1].
-    if left <= right:
-        return sequence[left:right+1]
-    else:
-        return np.vstack([ sequence[left:], sequence[:right+1] ])
 
 
 class SequenceMoments:
@@ -92,6 +83,13 @@ def fit_range(moments: SequenceMoments, first_index: int, last_index: int, with_
         direction=direction,
         loss=loss,
         straightness=straightness)
+
+
+def fit_line(points: np.ndarray) -> LineSegmentParams:
+    """TLS line fit through points, (N, 2) with N >= 2, same way the fitter fits a segment.
+    start_point and end_point are the extent of the points along the line."""
+    points = np.asarray(points, dtype=np.float64)
+    return fit_range(SequenceMoments(points), 0, len(points) - 1, with_endpoints=True)
 
 
 def fit_range_to_line(moments: SequenceMoments,

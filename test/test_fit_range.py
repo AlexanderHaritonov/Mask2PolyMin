@@ -2,7 +2,7 @@
 import numpy as np
 import pytest
 
-from mask2polymin.sequence_moments import principal_axis, subsequence, fit_range, fit_range_to_line, refit_segment, DEGENERATE_STRAIGHTNESS
+from mask2polymin.sequence_moments import principal_axis, subsequence, fit_range, fit_line, fit_range_to_line, refit_segment, DEGENERATE_STRAIGHTNESS
 from mask2polymin.fit_to_points_sequence import FitterToPointsSequence
 from mask2polymin.line_segment_params import LineSegmentParams
 from mask2polymin.sequence_segment import SequenceSegment
@@ -15,8 +15,10 @@ def fitter_fit_range(fitter, first, last):
 
 def assert_equivalent_fits(fitter, first, last):
     expected = fit_line_segment(subsequence(fitter.whole_sequence, first, last))
-    actual = fitter_fit_range(fitter, first, last)
+    assert_equivalent_params(fitter_fit_range(fitter, first, last), expected)
 
+
+def assert_equivalent_params(actual, expected):
     # direction: same line; sign may differ (eigenvector sign is arbitrary)
     assert abs(float(np.dot(expected.direction, actual.direction))) == pytest.approx(1.0, abs=1e-9)
     assert actual.loss == pytest.approx(expected.loss, rel=1e-6, abs=1e-9)
@@ -82,6 +84,30 @@ def test_identical_points_degenerate():
     np.testing.assert_allclose(actual.start_point, expected.start_point, atol=1e-9)
     np.testing.assert_allclose(actual.end_point, expected.end_point, atol=1e-9)
     assert actual.loss == 0.0
+
+
+def test_fit_line_matches_fit_line_segment():
+    rng = np.random.default_rng(3)
+    points = np.cumsum(rng.normal(0.5, 0.4, size=(30, 2)), axis=0) + 100
+    assert_equivalent_params(fit_line(points), fit_line_segment(points))
+
+
+def test_fit_line_of_a_fitted_segment_is_its_line():
+    # noisy circle: some segment wraps past the end of the contour
+    theta = np.linspace(0, 2 * np.pi, 40, endpoint=False)
+    rng = np.random.default_rng(11)
+    points = np.stack([50 + 20 * np.cos(theta), 50 + 20 * np.sin(theta)], axis=1)
+    points += rng.normal(0, 0.2, points.shape)
+    result = FitterToPointsSequence().fit(points, is_closed=True)
+    assert any(s.first_index > s.last_index for s in result.segments)
+    for segment in result.segments:
+        assert_equivalent_params(fit_line(segment.points()), segment.line_segment_params)
+
+
+def test_fit_line_takes_a_list_and_needs_two_points():
+    assert fit_line([[0, 0], [1, 1], [2, 2]]).loss == pytest.approx(0.0, abs=1e-12)
+    with pytest.raises(ValueError):
+        fit_line([[0, 0]])
 
 
 def test_without_endpoints_same_line_cheaper_params():

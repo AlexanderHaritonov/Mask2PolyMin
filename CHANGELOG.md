@@ -16,6 +16,7 @@ All notable changes to this project are documented here.
 - `on_step` keyword of `fit()` and `refit()`: an observer, called after each step of the fit, e.g. to draw it.
 - `FitResult`, returned by `fit()` and `refit()`: unpacks as `polygon, segments`, and has `sse()`, `orphans_count()` and `energy()`.
 - `SequenceSegment.frozen` and `SequenceSegment.freeze(point, direction)`.
+- `SequenceSegment.points()`: the segment's points. `fit_line(points)`: the line through any points, fitted same way the fitter fits a segment.
 
 ## [0.2.0] - 2026-07-26
 

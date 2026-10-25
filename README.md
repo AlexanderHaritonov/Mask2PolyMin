@@ -56,6 +56,7 @@ python example_usage.py
 <img src="https://raw.githubusercontent.com/AlexanderHaritonov/Mask2PolyMin/main/docs/step3_fitted_segments.png" alt="fitted segments" width="300">
 
 - `fit()` returns a `FitResult` that unpacks as `(polygon, segments)`: a closed polygon of float (sub-pixel) vertices, ready for GeoJSON/SVG/COCO export, plus the underlying fitted segments
+- Each segment has its points, `segment.points()`, and its fitted line, `segment.line_segment_params`. `fit_line(points)` fits a line to any points the same way, e.g. to the points of two segments on an edge that neighboring faces share.
 
 
 ## `refit()`: inner step of an energy minimization over neighboring faces

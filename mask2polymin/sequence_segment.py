@@ -14,6 +14,15 @@ def points_count(sequence_length: int, first_index: int, last_index: int) -> int
         return sequence_length - first_index + last_index + 1 # for closed polygon / circular case
 
 
+def subsequence(sequence: np.ndarray, left, right) -> np.ndarray:
+    # Range convention: left <= right is the linear range [left..right] (equal indices = a single point),
+    # left > right wraps past the end; the full circle is [0..n-1].
+    if left <= right:
+        return sequence[left:right+1]
+    else:
+        return np.vstack([ sequence[left:], sequence[:right+1] ])
+
+
 @dataclass
 class SequenceSegment:
     """ whole_sequence: numpy array of shape (N, 2) """
@@ -27,6 +36,10 @@ class SequenceSegment:
 
     def points_count(self) -> int:
         return points_count(len(self.whole_sequence), self.first_index, self.last_index)
+
+    def points(self) -> np.ndarray:
+        """The segment's points, (points_count, 2), in contour order."""
+        return subsequence(self.whole_sequence, self.first_index, self.last_index)
 
     def freeze(self, point: np.ndarray, direction: np.ndarray) -> None:
         """Pin this segment to the line through `point` along `direction`; refit() will not refit, split or merge it.
