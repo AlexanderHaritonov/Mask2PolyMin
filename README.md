@@ -26,7 +26,7 @@ polygon, segments = Fitter().fit(contour)
 Useful for post‑processing bitmask segmentation outputs from models such as MaskRCNN or YOLO‑Seg, especially when regular or low‑complexity shapes are required:
 - obtaining simple geometric representations
 - to reconstruct artificial objects that consist of straight edges, sharp corners, and regular geometric properties.
-- *planned:* use as the inner step of an energy minimization over neighboring faces (topological maps / B-rep) — see [future work](#future-work-and-ideas)
+- use as the inner step of an energy minimization over neighboring faces (topological maps / B-rep) — see [`refit()`](#refit-fit-again-with-frozen-lines)
 
 Unlike common point‑thinning algorithms (Ramer–Douglas–Peucker, Visvalingam–Whyatt, Zhang–Suen), this method:
 - minimizes segment count while preserving the raw shape
@@ -55,7 +55,30 @@ python example_usage.py
 
 <img src="https://raw.githubusercontent.com/AlexanderHaritonov/Mask2PolyMin/main/docs/step3_fitted_segments.png" alt="fitted segments" width="300">
 
-- `fit()` returns `(polygon, segments)`: a closed polygon of float (sub-pixel) vertices, ready for GeoJSON/SVG/COCO export, plus the underlying fitted segments
+- `fit()` returns a `FitResult` that unpacks as `(polygon, segments)`: a closed polygon of float (sub-pixel) vertices, ready for GeoJSON/SVG/COCO export, plus the underlying fitted segments
+
+
+## `refit()`: inner step of an energy minimization over neighboring faces
+```python
+def refit(self, points_sequence, previous: FitResult, is_closed: bool = False, *, guard: bool = True) -> FitResult
+```
+Usable as the inner step of an energy minimization over neighboring faces, e.g. stitching their polygons into a topological map or boundary representation by making them share edges.
+Starts from `previous.segments`; `previous` stays intact. `points_sequence` must be the contour `previous` was fitted to, otherwise `ValueError`.
+- `segment.freeze(point, direction)` pins a segment to a line. 
+- With `guard=True`, `refit()` never returns a higher Energy than its start. With `guard=False`, it returns the fitter's result as it is.
+
+```python
+import numpy as np
+from mask2polymin import FitterToPointsSequence as Fitter
+
+t = np.arange(20.0)
+contour = np.concatenate([np.c_[t, 0 * t], np.c_[20 + 0 * t, t], np.c_[20 - t, 20 + 0 * t], np.c_[0 * t, 20 - t]])  # dense closed square
+
+fitter = Fitter()
+result = fitter.fit(contour, is_closed=True)
+result.segments[0].freeze(point=[0, 0.5], direction=[1, 0])  # e.g. the line shared with the neighboring face
+polygon, segments = fitter.refit(contour, result, is_closed=True)  # side 0 now lies on y = 0.5
+```
 
 ## Tuning Parameters
 **max_segments_count** (default `18`): Upper limit on the number of segments in the output polygon. Keeping this bound relatively tight prevents over-fitting to noise and generally improves reconstructed shape accuracy.
@@ -120,14 +143,6 @@ Benchmarked against RDP (`cv2.approxPolyDP`) on synthetic shapes across noise le
 10 synthetic shapes ([performance_test/](performance_test/)) at noise level 3, Mask2PolyMin fit in red.
 
 ## future work and ideas
-- `refit()`: a warm-started fit, usable as the inner step of an energy minimization over neighboring faces, e.g. stitching their polygons into a topological map / boundary representation by making them share edges:
-  ```python
-  def refit(self, points_sequence, previous: FitResult, is_closed: bool = False) -> FitResult
-  ```
-  - starts from `previous.segments`.
-  - a segment marked `frozen = True`, with its line set by the caller is never refitted, split or merged — only its junctions slide.
-  - energy for the outer loop: the sum of the faces' Energies.
-
 - explore line fitting with Theil–Sen and respectively the Median or Mean Absolute Error as stop criterion ?
 
 ## Running Tests

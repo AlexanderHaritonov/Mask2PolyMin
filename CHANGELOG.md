@@ -2,7 +2,7 @@
 
 All notable changes to this project are documented here.
 
-## [Unreleased]
+## [0.3.0] - 2026-10-25
 
 ### Changed
 - **Breaking:** `FitterConfig.apply_local_defect_margin` removed.
@@ -12,6 +12,9 @@ All notable changes to this project are documented here.
 
 ### Added
 - `FitterConfig.segment_cost` (default `2`): the cost of one segment in the Energy, in units of `tolerance²`.
+- `refit()`: fit again, starting from a previous `FitResult`, with segments pinned to given lines. See the README.
+- `FitResult`, returned by `fit()` and `refit()`: unpacks as `polygon, segments`, and has `sse()`, `orphans_count()` and `energy()`.
+- `SequenceSegment.frozen` and `SequenceSegment.freeze(point, direction)`.
 
 ## [0.2.0] - 2026-07-26
 
