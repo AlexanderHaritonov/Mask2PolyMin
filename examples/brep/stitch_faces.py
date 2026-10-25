@@ -12,6 +12,7 @@ from mask2polymin import FitterToPointsSequence as Fitter, LineSegmentParams, Se
 
 FACES = ("left", "right")
 CONTOURS_PATH = HERE / "generation" / "contours.npz"
+EPSILON = 0.01  # the outer loop stops when a round lowers E by no more than this, in px² (tolerance 1)
 
 def stitch_faces():
     contours = load_contours()
@@ -25,14 +26,24 @@ def stitch_faces():
     segment_on_left = left.segments[3]
     segment_on_right = right.segments[1]
 
-    # 2. fit the shared line to the points of both faces
-    shared_line = fit_shared_line(segment_on_left, segment_on_right)
+    config = fitter.config
+    energy = np.inf
+    drop = np.inf
+    while drop > EPSILON:
+        # 2. fit the shared line to the points of both faces
+        shared_line = fit_shared_line(segment_on_left, segment_on_right)
 
-    # 3. freeze() both segments on the shared line, then refit() each face
-    segment_on_left.freeze(shared_line.start_point, shared_line.direction, key="shared")
-    segment_on_right.freeze(shared_line.start_point, shared_line.direction, key="shared")
-    left = fitter.refit(contours["left"], left, is_closed=True)
-    right = fitter.refit(contours["right"], right, is_closed=True)
+        # 3. freeze() both segments on the shared line, then refit() each face
+        segment_on_left.freeze(shared_line.start_point, shared_line.direction, key="shared")
+        segment_on_right.freeze(shared_line.start_point, shared_line.direction, key="shared")
+        left = fitter.refit(contours["left"], left, is_closed=True)
+        right = fitter.refit(contours["right"], right, is_closed=True)
+        segment_on_left = left.frozen["shared"]
+        segment_on_right = right.frozen["shared"]
+
+        new_energy = left.energy(config.tolerance, config.segment_cost) + right.energy(config.tolerance, config.segment_cost)
+        drop = energy - new_energy
+        energy = new_energy
 
 def fit_shared_line(segment_a: SequenceSegment, segment_b: SequenceSegment) -> LineSegmentParams:
     """The total least squares line through the points of both segments,
