@@ -422,6 +422,68 @@ def test_junction_between_two_frozen_segments_does_not_move(second_point, second
     assert (first.last_index, second.first_index) == (9, 10)
 
 
+# ---- keys of frozen segments ----
+
+@pytest.mark.parametrize("ranges, frozen_index, expected_index", [
+    ([(0, 19), (20, 29), (30, 39)], 1, 2),                       # the free 0..19 covers a corner: split before the frozen segment
+    ([(0, 4), (5, 9), (10, 19), (20, 29), (30, 39)], 3, 2),      # side 0 cut in two: merge before the frozen segment
+    ([(5, 9), (10, 19), (20, 29), (30, 39), (0, 4)], 2, 1),      # merge of the last and the first segment
+])
+def test_refit_keeps_the_key_of_a_frozen_segment_wherever_it_moves(ranges, frozen_index, expected_index):
+    # side 2 (indices 20..29) frozen to its own line y = 10
+    points = square_contour(10)
+    segments = segments_from_ranges(points, ranges)
+    segments[frozen_index].freeze([0.0, 10.0], [1.0, 0.0], key="edge")
+    fitter = FitterToPointsSequence(config=FitterConfig(tolerance=1.0))
+
+    result = fitter.refit(points, FitResult(np.empty((0, 2)), segments), is_closed=True)
+    edge = result.frozen["edge"]
+    assert edge is result.segments[expected_index]
+    assert edge.line_segment_params.start_point[1] == pytest.approx(10.0)  # still on y = 10; its junctions may move
+
+    # and in the next round
+    assert fitter.refit(points, result, is_closed=True).frozen["edge"].key == "edge"
+
+
+def test_frozen_holds_only_the_frozen_segments_with_a_key():
+    points = square_contour(10)
+    segments = segments_from_ranges(points, [(0, 9), (10, 19), (20, 29), (30, 39)], frozen_indices=(0,))
+    segments[2].freeze([0.0, 10.0], [1.0, 0.0], key=("left", "right"))
+    segments[3].key = "free"
+
+    assert FitResult(np.empty((0, 2)), segments).frozen == {("left", "right"): segments[2]}
+
+
+def test_freeze_again_without_key_keeps_the_key():
+    points = square_contour(10)
+    [segment] = segments_from_ranges(points, [(20, 29)])
+    segment.freeze([0.0, 10.0], [1.0, 0.0], key="edge")
+    segment.freeze([0.0, 10.5], [1.0, 0.0])
+    assert segment.key == "edge"
+    assert segment.clone().key == "edge"
+
+
+def test_refit_with_two_frozen_segments_of_the_same_key_raises():
+    points = square_contour(10)
+    segments = segments_from_ranges(points, [(0, 9), (10, 19), (20, 29), (30, 39)])
+    segments[0].freeze([0.0, 0.0], [1.0, 0.0], key="edge")
+    segments[2].freeze([0.0, 10.0], [1.0, 0.0], key="edge")
+    with pytest.raises(ValueError, match="unique"):
+        FitterToPointsSequence().refit(points, FitResult(np.empty((0, 2)), segments), is_closed=True)
+
+
+def test_guard_keeps_the_key_when_it_returns_the_start(monkeypatch):
+    # _fit() returns the 4 sides, free, with every junction 3 points past its corner: a higher Energy
+    points = square_contour(10)
+    fitter = FitterToPointsSequence(config=FitterConfig(tolerance=1.0))
+    fitted = fitter.fit(points, is_closed=True)
+    fitted.segments[2].freeze([0.0, 10.0], [1.0, 0.0], key="edge")
+    monkeypatch.setattr(fitter, "_fit", lambda segments: misplaced_junctions(points, side=10, shift=3))
+
+    result = fitter.refit(points, fitted, is_closed=True)
+    assert index_ranges([result.frozen["edge"]]) == index_ranges([fitted.segments[2]])
+
+
 # ---- guard ----
 
 def energy(result, config):

@@ -109,6 +109,7 @@ class FitterToPointsSequence:
               on_step: StepCallback | None = None) -> FitResult:
         """Fit again, starting from the segmentation in `previous`; `previous` stays intact.
         points_sequence must be the contour `previous` was fitted to.
+        Frozen segments keep their key: result.frozen[key] finds each in the result. Keys must be unique, otherwise ValueError.
         guard: if the result has a higher energy than `previous`, return the start segmentation instead.
         on_step: as in fit(). When the guard returns the start segmentation, the steps reported before do not lead to the result."""
         self._prepare(points_sequence, is_closed)
@@ -117,6 +118,9 @@ class FitterToPointsSequence:
         if len(self.whole_sequence) != previous_length:
             raise ValueError(f"points_sequence must be the contour previous was fitted to: got {len(self.whole_sequence)} points "
                              f"(excluding the closing duplicate), previous has {previous_length}")
+        keys = [segment.key for segment in previous.segments if segment.frozen and segment.key is not None]
+        if len(keys) != len(set(keys)):
+            raise ValueError(f"the keys of frozen segments must be unique, got {keys}")
 
         segments_sequence = self._fit(self._clones_of(previous.segments))
         segments = self._merge_collinear_segments(segments_sequence)

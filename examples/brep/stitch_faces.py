@@ -28,6 +28,12 @@ def stitch_faces():
     # 2. fit the shared line to the points of both faces
     shared_line = fit_shared_line(segment_on_left, segment_on_right)
 
+    # 3. freeze() both segments on the shared line, then refit() each face
+    segment_on_left.freeze(shared_line.start_point, shared_line.direction, key="shared")
+    segment_on_right.freeze(shared_line.start_point, shared_line.direction, key="shared")
+    left = fitter.refit(contours["left"], left, is_closed=True)
+    right = fitter.refit(contours["right"], right, is_closed=True)
+
 def fit_shared_line(segment_a: SequenceSegment, segment_b: SequenceSegment) -> LineSegmentParams:
     """The total least squares line through the points of both segments,
        fitted same way the fitter fits a segment"""

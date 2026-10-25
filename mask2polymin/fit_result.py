@@ -1,3 +1,4 @@
+from collections.abc import Hashable
 from typing import NamedTuple
 
 import numpy as np
@@ -11,6 +12,11 @@ class FitResult(NamedTuple):
     """Result of FitterToPointsSequence.fit() and refit(); unpacks as `polygon, segments`."""
     polygon: np.ndarray
     segments: list[SequenceSegment]
+
+    @property
+    def frozen(self) -> dict[Hashable, SequenceSegment]:
+        """The frozen segments that have a key, by key: see SequenceSegment.freeze()."""
+        return {segment.key: segment for segment in self.segments if segment.frozen and segment.key is not None}
 
     def orphans_count(self) -> int:
         """Number of contour points assigned to no segment."""

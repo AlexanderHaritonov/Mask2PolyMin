@@ -65,7 +65,7 @@ def refit(self, points_sequence, previous: FitResult, is_closed: bool = False, *
 ```
 Usable as the inner step of an energy minimization over neighboring faces, e.g. stitching their polygons into a topological map or boundary representation by making them share edges.
 Starts from `previous.segments`; `previous` stays intact. `points_sequence` must be the contour `previous` was fitted to, otherwise `ValueError`.
-- `segment.freeze(point, direction)` pins a segment to a line. 
+- `segment.freeze(point, direction, key=...)` pins a segment to a line; `result.frozen[key]` finds it in the result of `refit()`.
 - With `guard=True`, `refit()` never returns a higher Energy than its start. With `guard=False`, it returns the fitter's result as it is.
 
 ```python

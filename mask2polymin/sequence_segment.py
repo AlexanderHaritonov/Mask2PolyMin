@@ -1,4 +1,5 @@
 import numpy as np
+from collections.abc import Hashable
 from dataclasses import dataclass
 from typing import Optional
 
@@ -34,6 +35,9 @@ class SequenceSegment:
     ''' Set by the caller via freeze(), together with the line in line_segment_params. '''
     frozen: bool = False
 
+    ''' Set by the caller via freeze(): names a frozen segment, so FitResult.frozen[key] finds it in the result of refit(). '''
+    key: Optional[Hashable] = None
+
     def points_count(self) -> int:
         return points_count(len(self.whole_sequence), self.first_index, self.last_index)
 
@@ -41,13 +45,17 @@ class SequenceSegment:
         """The segment's points, (points_count, 2), in contour order."""
         return subsequence(self.whole_sequence, self.first_index, self.last_index)
 
-    def freeze(self, point: np.ndarray, direction: np.ndarray) -> None:
+    def freeze(self, point: np.ndarray, direction: np.ndarray, key: Hashable | None = None) -> None:
         """Pin this segment to the line through `point` along `direction`; refit() will not refit, split or merge it.
-        refit() fills in loss and the segment's start and end points."""
+        refit() fills in loss and the segment's start and end points.
+        key, e.g. the id of the edge shared with a neighboring face: refit() keeps it, so FitResult.frozen[key] finds the segment in the result,
+        wherever splits and merges of free segments moved it. Without key, the segment keeps the key it has: freeze it again to move its line."""
         direction = np.asarray(direction, dtype=np.float64)
         point = np.asarray(point, dtype=np.float64)
         self.line_segment_params = LineSegmentParams(point, point, direction / np.linalg.norm(direction))
         self.frozen = True
+        if key is not None:
+            self.key = key
 
     def clone(self) -> 'SequenceSegment':
         """Create a copy of this segment (whole_sequence is shared, line_segment_params is immutable)"""
@@ -56,7 +64,8 @@ class SequenceSegment:
             first_index=self.first_index,
             last_index=self.last_index,
             line_segment_params=self.line_segment_params,  # immutable, safe to share
-            frozen=self.frozen
+            frozen=self.frozen,
+            key=self.key
         )
 
 def print_segments_info(segments):
