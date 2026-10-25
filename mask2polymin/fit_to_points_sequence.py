@@ -1,4 +1,5 @@
 import numpy as np
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from mask2polymin.sequence_moments import subsequence, fit_range, refit_segment, SequenceMoments, DEGENERATE_STRAIGHTNESS
@@ -25,6 +26,12 @@ MAX_ADJUST_ITERATIONS = 20
 ''' Max points per junction that may be left orphaned (assigned to no segment).
 A point farther than tolerance from both adjacent lines is proposed as an orphan; it becomes one only if Energy drops. '''
 MAX_ORPHANS_PER_JUNCTION = 2
+
+''' on_step(kind, segments, index) of fit() and refit(). '''
+StepCallback = Callable[[str, list[SequenceSegment], int | None], None]
+
+def _ignore_step(kind: str, segments: list[SequenceSegment], index: int | None) -> None:
+    """The on_step when none is given."""
 
 @dataclass
 class FitterConfig:
@@ -72,9 +79,21 @@ class FitterConfig:
 class FitterToPointsSequence:
     def __init__(self, config: FitterConfig | None = None):
         self.config = config or FitterConfig()
+        self._on_step = _ignore_step
 
-    def fit(self, points_sequence: np.ndarray, is_closed: bool = False) -> FitResult:
+    def fit(self, points_sequence: np.ndarray, is_closed: bool = False, *, on_step: StepCallback | None = None) -> FitResult:
+        """on_step(kind, segments, index), if given, is called after each step, e.g. to draw it:
+          "start":        the start segmentation: for fit() the one segment over the whole contour, for refit() the segments of `previous`.
+          "split":        a segment was split in two, at its point farthest from its line; index is the first of the two. Their junction has not moved yet.
+          "junctions":    junctions moved, to lower the Energy.
+          "split undone": the split did not lower the Energy; segments is the segmentation before it, and the fit ends with it.
+          "merge":        two neighboring segments were merged; index is the merged segment.
+        index is None for the other kinds.
+        segments are the fitter's working objects: read them during the call, but don't keep or change them.
+        Their lines have no start and end points yet: start_point == end_point, a point on the line.
+        on_step does not change the result."""
         self._prepare(points_sequence, is_closed)
+        self._on_step = on_step or _ignore_step
 
         last_index = len(self.whole_sequence) - 1
         initial_segment = SequenceSegment(
@@ -86,11 +105,14 @@ class FitterToPointsSequence:
         segments = self._merge_collinear_segments(segments_sequence)
         return self._result_with_endpoints(segments)
 
-    def refit(self, points_sequence: np.ndarray, previous: FitResult, is_closed: bool = False, *, guard: bool = True) -> FitResult:
+    def refit(self, points_sequence: np.ndarray, previous: FitResult, is_closed: bool = False, *, guard: bool = True,
+              on_step: StepCallback | None = None) -> FitResult:
         """Fit again, starting from the segmentation in `previous`; `previous` stays intact.
         points_sequence must be the contour `previous` was fitted to.
-        guard: if the result has a higher energy than `previous`, return the start segmentation instead."""
+        guard: if the result has a higher energy than `previous`, return the start segmentation instead.
+        on_step: as in fit(). When the guard returns the start segmentation, the steps reported before do not lead to the result."""
         self._prepare(points_sequence, is_closed)
+        self._on_step = on_step or _ignore_step
         previous_length = len(previous.segments[0].whole_sequence)
         if len(self.whole_sequence) != previous_length:
             raise ValueError(f"points_sequence must be the contour previous was fitted to: got {len(self.whole_sequence)} points "
@@ -150,10 +172,11 @@ class FitterToPointsSequence:
         for segment in segments:
             if segment.frozen:
                 refit_segment(self._moments, segment, with_endpoints=False)
-                
+        self._on_step("start", segments, None)
+
         # A frozen line may have moved, or the junctions may be misplaced, so the junctions are adjusted first. Otherwise they would move only after a split.
         if len(segments) > 1:
-            sse_per_segment = self._adjust_segmentation(segments, 0)
+            sse_per_segment = self._adjust_junctions(segments, 0)
         else:
             sse_per_segment = self._sse_per_segment(segments)
         if sse_per_segment < self.config.tolerance_sq:
@@ -172,8 +195,9 @@ class FitterToPointsSequence:
                 print(f"splitting at {index_of_segment_to_split}")
 
             segmentation_after_split = self._split_segment(segments, index_of_segment_to_split)
+            self._on_step("split", segmentation_after_split, index_of_segment_to_split)
 
-            new_sse_per_segment = self._adjust_segmentation(segmentation_after_split, index_of_segment_to_split)
+            new_sse_per_segment = self._adjust_junctions(segmentation_after_split, index_of_segment_to_split)
             if self.config.verbose: print(f"sse per segment: {new_sse_per_segment}")
             if self.config.plot_intermediate_steps:
                 from mask2polymin.plotting import plot_segments
@@ -181,6 +205,7 @@ class FitterToPointsSequence:
 
             if self._energy(segmentation_after_split) >= self._energy(segments):
                 if self.config.verbose: print("Breaking up because the split does not lower the energy at", len(segments), "segments.")
+                self._on_step("split undone", segments, None)
                 return segments
 
             if new_sse_per_segment < self.config.tolerance_sq:
@@ -192,6 +217,14 @@ class FitterToPointsSequence:
     def _energy(self, segments: list[SequenceSegment]) -> float:
         sse = sum(segment_sse(segment) for segment in segments)
         return energy(sse, orphans_count(segments), len(segments), self.config.tolerance, self.config.segment_cost)
+
+    def _adjust_junctions(self, segments: list[SequenceSegment], start_segment_index: int) -> float:
+        """_adjust_segmentation(), then on_step("junctions") if a junction moved."""
+        ranges = [(s.first_index, s.last_index) for s in segments]
+        sse_per_segment = self._adjust_segmentation(segments, start_segment_index)
+        if [(s.first_index, s.last_index) for s in segments] != ranges:
+            self._on_step("junctions", segments, None)
+        return sse_per_segment
 
     def _merge_collinear_segments(self, segments: list[SequenceSegment]) -> list[SequenceSegment]:
         # We go once through the pairs of neighboring segments.
@@ -234,9 +267,11 @@ class FitterToPointsSequence:
                     # The walk then checks exactly the two pairs involving merged segment.
                     # All earlier pairs are unchanged and were already checked, so nothing is re-walked.
                     segments = segments[1:-1] + [merged]
+                    self._on_step("merge", segments, len(segments) - 1)
                     i = max(0, len(segments) - 2)
                 else:
                     segments = segments[:i] + [merged] + segments[i+2:]
+                    self._on_step("merge", segments, i)
                     i = max(0, i - 1)
             else:
                 i += 1
