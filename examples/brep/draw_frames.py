@@ -11,6 +11,8 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 
 import numpy as np
+from PIL import Image
+import matplotlib.colors
 import matplotlib.pyplot as plt
 
 from mask2polymin import FitterToPointsSequence as Fitter, FitResult, LineSegmentParams, SequenceSegment
@@ -21,7 +23,7 @@ SEGMENT_COLORS = ("tab:orange", "tab:green", "tab:purple", "tab:brown", "tab:pin
 SHARED_LINE_COLOR = "black"  # only in the matching edge's frames
 FROZEN_RING_COLOR = "white"  # rings around the points of the segment being frozen, only in its freezing frame
 ORPHAN_COLOR = "white"  # contour points that belong to no segment
-BACKGROUND = (0.7, 0.7, 0.7)  # the gray of frame 00
+MASKS_DIR = HERE / "generation"  # left_mask.bmp and right_mask.bmp: the background of every frame, as in frame 00
 FRAMES_DIR = HERE / "frames"
 FIRST_FRAME = "00_contours.png"  # from generation/extract_contours.py
 VIEW_MARGIN = 3  # px around the contours
@@ -40,6 +42,7 @@ class DrawingFitter(Fitter):
     def __init__(self):
         super().__init__()
         self.contours = load_contours()
+        self.background = masks_image()
         self.results = {}  # each face's latest result
         self.colored = {}  # each face's segments in its latest frame, as (point indices, color): the face stays so in the other face's frames
         self.new_colors = iter(SEGMENT_COLORS)  # each new segment takes the next one, so no two segments share a color, across both faces
@@ -78,7 +81,7 @@ class DrawingFitter(Fitter):
             step = f"merged into the {color_name(colors[index])} segment"
         else:
             step = STEP_TITLES[kind]
-        fig, ax = new_frame(f"{face.capitalize()}: {step}", self.contours)
+        fig, ax = self.new_frame(f"{face.capitalize()}: {step}")
         self.draw_other_face(ax, face)
         draw_points(ax, self.contours[face], self.colored[face])
         if frozen_points is not None:
@@ -90,7 +93,7 @@ class DrawingFitter(Fitter):
     def draw_result(self, face, result: FitResult):
         self.results[face] = result
         self.segment_colors(face, result.segments)
-        fig, ax = new_frame(f"{face.capitalize()}: resulting polygon", self.contours)
+        fig, ax = self.new_frame(f"{face.capitalize()}: resulting polygon")
         self.draw_other_face(ax, face)
         draw_points(ax, self.contours[face], self.colored[face])
         draw_polygon(ax, face, result.polygon)
@@ -98,7 +101,7 @@ class DrawingFitter(Fitter):
 
     def draw_shared_line(self):
         """Both faces with their latest polygons, and the shared line through the points of their frozen segments."""
-        fig, ax = new_frame(f"Round {self.round}: matching edge", self.contours)
+        fig, ax = self.new_frame(f"Round {self.round}: matching edge")
         for face in FACES:
             draw_points(ax, self.contours[face], self.colored[face])
             draw_polygon(ax, face, self.results[face].polygon)
@@ -109,7 +112,7 @@ class DrawingFitter(Fitter):
 
     def draw_polygons(self, title: str, results: dict[str, FitResult], name: str):
         """Only the polygons' lines, thicker: no points, no vertices. At the start of each round, and at the end."""
-        fig, ax = new_frame(title, self.contours)
+        fig, ax = self.new_frame(title)
         for face in FACES:
             draw_polygon(ax, face, results[face].polygon, with_vertices=False, linewidth=4)
         self.save(fig, name)
@@ -146,6 +149,17 @@ class DrawingFitter(Fitter):
     def face_of(self, points_sequence) -> str:
         return next(face for face in FACES if np.array_equal(self.contours[face], points_sequence))
 
+    def new_frame(self, title: str):
+        """A frame like frame 00: the masks as background, title, margins, view."""
+        fig, ax = plt.subplots(figsize=(6, 6))
+        height, width = self.background.shape[:2]
+        ax.imshow(self.background, extent=(-0.5, width - 0.5, height - 0.5, -0.5))  # pixel centers at integer coordinates, as find_contours assumes
+        set_view(ax, self.contours)
+        fig.suptitle(title, fontsize=12, fontweight='bold')
+        ax.axis('off')
+        fig.subplots_adjust(left=0.02, right=0.98, top=0.91, bottom=0.02)
+        return fig, ax
+
     def save(self, fig, name):
         self.frames_count += 1
         fig.savefig(FRAMES_DIR / f"{self.frames_count:02d}_{name}.png", dpi=100)  # 600x600, as frame 00
@@ -168,19 +182,25 @@ def remove_old_frames() -> None:
             path.unlink()
 
 
-def new_frame(title: str, contours: dict):
-    """A frame laid out like frame 00: title, margins, view; the gray as background, since there are no masks."""
-    fig, ax = plt.subplots(figsize=(6, 6))
-    ax.set_facecolor(BACKGROUND)
-    ax.set_xticks([])
-    ax.set_yticks([])
-    for spine in ax.spines.values():
-        spine.set_visible(False)
-    ax.set_aspect('equal')
-    set_view(ax, contours)
-    fig.suptitle(title, fontsize=12, fontweight='bold')
-    fig.subplots_adjust(left=0.02, right=0.98, top=0.91, bottom=0.02)
-    return fig, ax
+def masks_image() -> np.ndarray:
+    """Each face's mask tinted in its face's color, blended where they overlap, on gray: as in frame 00."""
+    masks = {face: load_mask(MASKS_DIR / f"{face}_mask.bmp") for face in FACES}
+    coverage = sum(masks[face].astype(float) for face in FACES)
+    tints = sum(masks[face][..., None] * light(FACE_COLORS[face]) for face in FACES)
+    image = np.full(coverage.shape + (3,), 0.7)  # gray background, as in example_house
+    covered = coverage > 0
+    image[covered] = tints[covered] / coverage[covered][:, None]
+    return image
+
+
+def load_mask(path) -> np.ndarray:
+    """Load mask as a boolean (H, W) array."""
+    return np.asarray(Image.open(path).convert("L")) > 0
+
+
+def light(color) -> np.ndarray:
+    """The color blended halfway with white."""
+    return (np.array(matplotlib.colors.to_rgb(color)) + 1) / 2
 
 
 def draw_face_points(ax, face, contour: np.ndarray) -> None:
