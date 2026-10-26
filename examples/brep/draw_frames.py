@@ -25,12 +25,10 @@ FRAMES_DIR = HERE / "frames"
 FIRST_FRAME = "00_contours.png"  # from generation/extract_contours.py
 VIEW_MARGIN = 3  # px around the contours
 
-STEP_TITLES = {
-    "start": "fit() starts with one segment",
-    "split": "split segment {index}",
+STEP_TITLES = {  # split and merge name the segments by their colors: see draw_step()
+    "start": "start with one segment",
     "junctions": "junctions moved",
     "split undone": "split undone",
-    "merge": "merged into segment {index}",
 }
 
 
@@ -49,7 +47,7 @@ class DrawingFitter(Fitter):
     def fit(self, points_sequence, is_closed=False):
         face = self.face_of(points_sequence)
         result = super().fit(points_sequence, is_closed, on_step=partial(self.draw_step, face))
-        self.draw_result(face, result, "fit()")
+        self.draw_result(face, result)
         return result
 
     def refit(self, points_sequence, previous, is_closed=False):
@@ -58,24 +56,31 @@ class DrawingFitter(Fitter):
             self.round += 1
             self.draw_shared_line()
         result = super().refit(points_sequence, previous, is_closed, on_step=partial(self.draw_step, face))
-        self.draw_result(face, result, "refit()")
+        self.draw_result(face, result)
         return result
 
     def draw_step(self, face, kind, segments, index):
         """on_step of fit() and refit(). The start of refit() is the segmentation with the newly frozen segment."""
+        previous_colors = {color for _, color in self.colored.get(face, [])}
+        colors = self.segment_colors(face, segments)
         if kind == "start" and self.round > 0:
-            frozen_index = next(i for i, segment in enumerate(segments) if segment.frozen)
-            title = f"Round {self.round}: freezing segment {frozen_index} on the {face} face"
+            frozen = next(color for color, segment in zip(colors, segments) if segment.frozen)
+            step = f"freezing the {color_name(frozen)} segment"
+        elif kind == "split":  # the half with a color from the previous frame is the old segment
+            old, new = sorted(colors[index:index + 2], key=lambda color: color not in previous_colors)
+            step = f"{color_name(new)} split off the {color_name(old)} segment"
+        elif kind == "merge":
+            step = f"merged into the {color_name(colors[index])} segment"
         else:
-            title = f"{self.prefix(face)}: {STEP_TITLES[kind].format(index=index)}"
-        fig, ax = new_frame(title, self.contours)
+            step = STEP_TITLES[kind]
+        fig, ax = new_frame(f"{face.capitalize()}: {step}", self.contours)
         self.draw_other_face(ax, face)
-        draw_segments(ax, self.contours[face], segments, self.segment_colors(face, segments), with_lines=True)
+        draw_segments(ax, self.contours[face], segments, colors, with_lines=True)
         self.save(fig, f"{face}_{kind.replace(' ', '_')}")
 
-    def draw_result(self, face, result: FitResult, method: str):
+    def draw_result(self, face, result: FitResult):
         self.results[face] = result
-        fig, ax = new_frame(f"{self.prefix(face)}: the polygon from {method}", self.contours)
+        fig, ax = new_frame(f"{face.capitalize()}: resulting polygon", self.contours)
         self.draw_other_face(ax, face)
         draw_segments(ax, self.contours[face], result.segments, self.segment_colors(face, result.segments), with_lines=False)
         draw_polygon(ax, face, result.polygon)
@@ -83,12 +88,12 @@ class DrawingFitter(Fitter):
 
     def draw_shared_line(self):
         """Both faces with their latest polygons, and the shared line through the points of their frozen segments."""
-        fig, ax = new_frame(f"Round {self.round}: one line through both faces' points", self.contours)
+        fig, ax = new_frame(f"Round {self.round}: matching edge", self.contours)
         draw_stitched(ax, self.contours, self.results)
         self.save(fig, "shared_line")
 
     def draw_final(self, results: dict[str, FitResult]):
-        fig, ax = new_frame(f"Final polygons, after {self.round} rounds", self.contours)
+        fig, ax = new_frame("Final polygons", self.contours)
         draw_stitched(ax, self.contours, results)
         self.save(fig, "final")
 
@@ -116,9 +121,6 @@ class DrawingFitter(Fitter):
                 colors[i] = next(color for color in SEGMENT_COLORS if color not in colors)
         self.colored[face] = list(zip(indices, colors))
         return colors
-
-    def prefix(self, face) -> str:
-        return f"{face.capitalize()} face" if self.round == 0 else f"Round {self.round}, {face} face"
 
     def face_of(self, points_sequence) -> str:
         return next(face for face in FACES if np.array_equal(self.contours[face], points_sequence))
@@ -190,6 +192,10 @@ def draw_stitched(ax, contours: dict, results: dict[str, FitResult]) -> None:
         draw_polygon(ax, face, results[face].polygon)
     points = np.concatenate([segment.points() for segment in frozen])
     draw_line(ax, frozen[0].line_segment_params, points, color=FROZEN_COLOR, linewidth=5, zorder=1)
+
+
+def color_name(color: str) -> str:
+    return color.removeprefix("tab:")
 
 
 def point_indices(segment: SequenceSegment) -> set[int]:
