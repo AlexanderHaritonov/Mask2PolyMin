@@ -2,6 +2,7 @@
 Draws the video's frames, from 01 on, into frames/: runs stitch_faces() with a fitter that draws
 
 1. each step of fit() and refit(), via their on_step observer, and each result;
+   a junctions step also point by point: one frame per point that changes segments;
 2. per round of the outer loop: the shared line, then the frozen segment at the start of each face's refit();
 3. the final polygons.
 
@@ -15,7 +16,7 @@ from PIL import Image
 import matplotlib.colors
 import matplotlib.pyplot as plt
 
-from mask2polymin import FitterToPointsSequence as Fitter, FitResult, LineSegmentParams, SequenceSegment
+from mask2polymin import FitterToPointsSequence as Fitter, FitResult, LineSegmentParams, SequenceSegment, fit_line
 from stitch_faces import FACES, load_contours, stitch_faces
 
 FACE_COLORS = {"left": "tab:red", "right": "tab:blue"}  # as in generation/extract_contours.py
@@ -48,6 +49,7 @@ class DrawingFitter(Fitter):
         self.new_colors = iter(SEGMENT_COLORS)  # each new segment takes the next one, so no two segments share a color, across both faces
         self.round = 0  # 0 during fit()
         self.frames_count = 0
+        self.moves_count = 0
 
     def fit(self, points_sequence, is_closed=False):
         face = self.face_of(points_sequence)
@@ -67,7 +69,8 @@ class DrawingFitter(Fitter):
 
     def draw_step(self, face, kind, segments, index):
         """on_step of fit() and refit(). The start of refit() is the segmentation with the newly frozen segment."""
-        previous_colors = {color for _, color in self.colored.get(face, [])}
+        previous = self.colored.get(face, [])
+        previous_colors = {color for _, color in previous}
         colors = self.segment_colors(face, segments)
         frozen_points = None
         if kind == "start" and self.round > 0:
@@ -81,6 +84,8 @@ class DrawingFitter(Fitter):
             step = f"merged into the {color_name(colors[index])} segment"
         else:
             step = STEP_TITLES[kind]
+        if kind == "junctions":
+            self.draw_moves(face, previous, segments, colors)
         fig, ax = self.new_frame(f"{face.capitalize()}: {step}")
         self.draw_other_face(ax, face)
         draw_points(ax, self.contours[face], self.colored[face])
@@ -89,6 +94,24 @@ class DrawingFitter(Fitter):
         for segment, color in zip(segments, colors):  # the lines have no start and end points during the steps
             draw_line(ax, segment.line_segment_params, segment.points(), color=color, linewidth=2)
         self.save(fig, f"{face}_{kind.replace(' ', '_')}")
+
+    def draw_moves(self, face, previous: list[tuple[set[int], str]], segments: list[SequenceSegment], colors: list[str]):
+        """A junctions step point by point: one frame per point that changes segments, except the last, which the step's own frame shows.
+        The point takes its new segment's color, or white as an orphan, and each line is fitted to its segment's points again; a frozen segment keeps its line."""
+        contour = self.contours[face]
+        frozen_lines = {color: segment.line_segment_params for segment, color in zip(segments, colors) if segment.frozen}
+        moves = junction_moves(owner_colors(previous), owner_colors(self.colored[face]), len(contour))
+        for move, owners in enumerate(moves[:-1], start=1):
+            colored = [({i for i, owner in owners.items() if owner == color}, color) for color in dict.fromkeys(owners.values())]
+            fig, ax = self.new_frame(f"{face.capitalize()}: moving junctions")
+            self.draw_other_face(ax, face)
+            draw_points(ax, contour, colored)
+            for indices, color in colored:
+                if len(indices) >= 2:
+                    points = contour[sorted(indices)]
+                    line = frozen_lines[color] if color in frozen_lines else fit_line(points)
+                    draw_line(ax, line, points, color=color, linewidth=2)
+            self.save(fig, f"{face}_moving", move)
 
     def draw_result(self, face, result: FitResult):
         self.results[face] = result
@@ -160,9 +183,15 @@ class DrawingFitter(Fitter):
         fig.subplots_adjust(left=0.02, right=0.98, top=0.91, bottom=0.02)
         return fig, ax
 
-    def save(self, fig, name):
-        self.frames_count += 1
-        fig.savefig(FRAMES_DIR / f"{self.frames_count:02d}_{name}.png", dpi=100)  # 600x600, as frame 00
+    def save(self, fig, name, move=None):
+        """Frame NN_name.png. The moves of a junctions step come before its frame NN, as NN_01_name.png, NN_02_name.png, ...: a digit sorts before a letter."""
+        if move is None:
+            self.frames_count += 1
+            stem = f"{self.frames_count:02d}_{name}"
+        else:
+            self.moves_count += 1
+            stem = f"{self.frames_count + 1:02d}_{move:02d}_{name}"
+        fig.savefig(FRAMES_DIR / f"{stem}.png", dpi=100)  # 600x600, as frame 00
         plt.close(fig)
 
 
@@ -171,7 +200,7 @@ def draw_frames():
     fitter = DrawingFitter()
     left, right = stitch_faces(fitter)
     fitter.draw_polygons("Final polygons", {"left": left, "right": right}, "final")
-    print(f"Saved {fitter.frames_count} frames to {FRAMES_DIR}")
+    print(f"Saved {fitter.frames_count} frames and {fitter.moves_count} junction moves to {FRAMES_DIR}")
 
 
 def remove_old_frames() -> None:
@@ -231,6 +260,38 @@ def point_indices(segment: SequenceSegment) -> set[int]:
     """The indices of the segment's points in the contour; a range may wrap past the end."""
     count = len(segment.whole_sequence)
     return {(segment.first_index + k) % count for k in range(segment.points_count())}
+
+
+def owner_colors(colored: list[tuple[set[int], str]]) -> dict[int, str]:
+    """Each point's segment, by its color. Orphans are left out."""
+    return {i: color for indices, color in colored for i in indices}
+
+
+def junction_moves(old: dict[int, str], new: dict[int, str], count: int) -> list[dict[int, str]]:
+    """From old to new owner_colors(), one point at a time: the owners after each move.
+    The next point to move is one beside its new segment, or else at the end of its old one, preferably beside the point moved last:
+    so each segment stays in one piece, and the junctions move one at a time, point by point."""
+    owners = dict(old)
+    remaining = [i for i in range(count) if old.get(i) != new.get(i)]
+    last = None
+
+    def rank(i):
+        neighbors = (owners.get((i - 1) % count), owners.get((i + 1) % count))
+        beside_new = new.get(i) in neighbors
+        beside_last = last is not None and (i - last) % count in (1, count - 1)
+        at_end = any(neighbor != owners.get(i) for neighbor in neighbors)
+        return not beside_new, not beside_last, not at_end
+
+    moves = []
+    while remaining:
+        last = min(remaining, key=rank)  # of equals, the lowest index
+        remaining.remove(last)
+        if last in new:
+            owners[last] = new[last]
+        else:
+            del owners[last]  # an orphan
+        moves.append(dict(owners))
+    return moves
 
 
 def draw_line(ax, line: LineSegmentParams, points: np.ndarray, **style) -> None:
