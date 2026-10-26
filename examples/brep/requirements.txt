@@ -1,0 +1,2 @@
+-r ../../requirements-examples.txt
+imageio[ffmpeg]  # the MP4; the GIF needs only Pillow, which comes with matplotlib

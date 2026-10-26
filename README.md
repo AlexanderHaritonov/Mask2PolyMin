@@ -106,7 +106,7 @@ The input is an ordered sequence of contour points, open or closed. Lines are fi
 5. **Merge** adjacent segments with similar directions when this lowers the Energy.
 6. **Reconstruct vertices**: each corner is the intersection of the two adjacent fitted lines — sub-pixel accurate even when no input point lies at the true corner.
 
-To watch these steps, e.g. to draw them, pass on_step to fit() or refit(): it is called after each of steps 1–5. See the docstring of fit().
+To watch these steps, e.g. to draw them, pass `on_step` to `fit()` or `refit()`: it is called after each of steps 1–5.
 
 Thanks to precomputed cumulative moments of the sequence, fitting a line to any contiguous point range is O(1).
 
