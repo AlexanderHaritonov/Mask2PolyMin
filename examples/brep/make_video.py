@@ -16,10 +16,10 @@ import imageio.v2 as imageio
 FRAMES_DIR = HERE / "frames"
 GIF_PATH = HERE / "brep_demo.gif"
 MP4_PATH = HERE / "brep_demo.mp4"
-SECONDS_PER_FRAME = 1
+SECONDS_PER_FRAME = 0.5
 SECONDS_FINAL_FRAME = 3  # the final polygons
-SECONDS_PER_ANIMATION_FRAME = 0.2  # junction moves and splits: draw_frames.py names the animation before a step's frame NN NN_01_*.png, NN_02_*.png, ...
-MP4_FPS = 25  # a fixed frame rate: each frame repeated for its duration
+SECONDS_PER_ANIMATION_FRAME = 0.1  # junction moves and splits: draw_frames.py names the animation before a step's frame NN NN_01_*.png, NN_02_*.png, ...
+MP4_FPS = 30  # a fixed frame rate: each frame repeated for its duration, a whole number of frames for each of the durations above
 
 
 def make_video():
