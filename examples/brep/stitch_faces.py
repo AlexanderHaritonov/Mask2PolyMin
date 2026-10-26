@@ -8,15 +8,16 @@ HERE = Path(__file__).resolve().parent
 
 import numpy as np
 
-from mask2polymin import FitterToPointsSequence as Fitter, LineSegmentParams, SequenceSegment, fit_line
+from mask2polymin import FitterToPointsSequence as Fitter, FitResult, LineSegmentParams, SequenceSegment, fit_line
 
 FACES = ("left", "right")
 CONTOURS_PATH = HERE / "generation" / "contours.npz"
 EPSILON = 0.01  # the outer loop stops when a round lowers E by no more than this, in px² (tolerance 1)
 
-def stitch_faces():
+def stitch_faces(fitter: Fitter | None = None) -> tuple[FitResult, FitResult]:
+    """Returns the final fit of the left and the right face. draw_frames.py passes a fitter that draws each step."""
     contours = load_contours()
-    fitter = Fitter()
+    fitter = fitter or Fitter()
 
     # 1. fit() each face
     left = fitter.fit(contours["left"], is_closed=True)
@@ -44,6 +45,8 @@ def stitch_faces():
         new_energy = left.energy(config.tolerance, config.segment_cost) + right.energy(config.tolerance, config.segment_cost)
         drop = energy - new_energy
         energy = new_energy
+
+    return left, right
 
 def fit_shared_line(segment_a: SequenceSegment, segment_b: SequenceSegment) -> LineSegmentParams:
     """The total least squares line through the points of both segments,
