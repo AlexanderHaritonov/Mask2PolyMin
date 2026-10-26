@@ -3,6 +3,7 @@ Draws the video's frames, from 01 on, into frames/: runs stitch_faces() with a f
 
 1. each step of fit() and refit(), via their on_step observer, and each result;
    a junctions step also point by point: one frame per point that changes segments;
+   a split also in steps: the old segment blinks, a cut appears, the split off half takes its color and blinks;
 2. per round of the outer loop: the shared line, then the frozen segment at the start of each face's refit();
 3. the final polygons.
 
@@ -24,6 +25,9 @@ SEGMENT_COLORS = ("tab:orange", "tab:green", "tab:purple", "tab:brown", "tab:pin
 SHARED_LINE_COLOR = "black"  # only in the matching edge's frames
 FROZEN_RING_COLOR = "white"  # rings around the points of the segment being frozen, only in its freezing frame
 ORPHAN_COLOR = "white"  # contour points that belong to no segment
+CUT_COLOR = "red"  # the cut across the contour at a split place, during the split's animation
+CUT_LENGTH = 2.5  # px
+BLINKS = 2  # off and on again, per blink
 MASKS_DIR = HERE / "generation"  # left_mask.bmp and right_mask.bmp: the background of every frame, as in frame 00
 FRAMES_DIR = HERE / "frames"
 FIRST_FRAME = "00_contours.png"  # from generation/extract_contours.py
@@ -49,7 +53,7 @@ class DrawingFitter(Fitter):
         self.new_colors = iter(SEGMENT_COLORS)  # each new segment takes the next one, so no two segments share a color, across both faces
         self.round = 0  # 0 during fit()
         self.frames_count = 0
-        self.moves_count = 0
+        self.animation_frames_count = 0
 
     def fit(self, points_sequence, is_closed=False):
         face = self.face_of(points_sequence)
@@ -84,9 +88,12 @@ class DrawingFitter(Fitter):
             step = f"merged into the {color_name(colors[index])} segment"
         else:
             step = STEP_TITLES[kind]
-        if kind == "junctions":
+        title = f"{face.capitalize()}: {step}"
+        if kind == "split":
+            self.draw_splitting(face, previous, segments, colors, index, old, title)
+        elif kind == "junctions":
             self.draw_moves(face, previous, segments, colors)
-        fig, ax = self.new_frame(f"{face.capitalize()}: {step}")
+        fig, ax = self.new_frame(title)
         self.draw_other_face(ax, face)
         draw_points(ax, self.contours[face], self.colored[face])
         if frozen_points is not None:
@@ -103,15 +110,41 @@ class DrawingFitter(Fitter):
         moves = junction_moves(owner_colors(previous), owner_colors(self.colored[face]), len(contour))
         for move, owners in enumerate(moves[:-1], start=1):
             colored = [({i for i, owner in owners.items() if owner == color}, color) for color in dict.fromkeys(owners.values())]
-            fig, ax = self.new_frame(f"{face.capitalize()}: moving junctions")
-            self.draw_other_face(ax, face)
-            draw_points(ax, contour, colored)
+            lines = []
             for indices, color in colored:
                 if len(indices) >= 2:
                     points = contour[sorted(indices)]
-                    line = frozen_lines[color] if color in frozen_lines else fit_line(points)
-                    draw_line(ax, line, points, color=color, linewidth=2)
-            self.save(fig, f"{face}_moving", move)
+                    lines.append((frozen_lines[color] if color in frozen_lines else fit_line(points), points, color))
+            self.draw_animation_frame(face, f"{face.capitalize()}: moving junctions", colored, lines, "moving", move)
+
+    def draw_splitting(self, face, previous: list[tuple[set[int], str]], segments: list[SequenceSegment], colors: list[str], index, old, title):
+        """A split in steps, before the split's own frame: the old segment's points blink, a cut appears at the split place,
+        the split off half takes its new color and its own line, and blinks. The split's own frame is without the cut."""
+        first, second = segments[index], segments[index + 1]
+        old_points = np.concatenate([first.points(), second.points()])
+        others = [(segment.line_segment_params, segment.points(), color) for k, (segment, color) in enumerate(zip(segments, colors)) if k not in (index, index + 1)]
+        lines_before = others + [(fit_line(old_points), old_points, old)]
+        lines_after = others + [(first.line_segment_params, first.points(), colors[index]), (second.line_segment_params, second.points(), colors[index + 1])]
+        split_off = point_indices(second if colors[index] == old else first)
+        cut = cut_line(first.points()[-1], second.points()[0])  # after the pivot, the point farthest from the old line
+        splitting = f"{face.capitalize()}: splitting the {color_name(old)} segment"
+        frames = ([(splitting, previous, lines_before, hidden, None) for hidden in blinking(point_indices(first) | point_indices(second))]
+                  + [(splitting, previous, lines_before, set(), cut)]
+                  + [(title, self.colored[face], lines_after, hidden, cut) for hidden in [set()] + blinking(split_off)])
+        for number, (frame_title, colored, lines, hidden, frame_cut) in enumerate(frames, start=1):
+            self.draw_animation_frame(face, frame_title, colored, lines, "splitting", number, hidden, frame_cut)
+
+    def draw_animation_frame(self, face, title, colored: list[tuple[set[int], str]], lines: list[tuple[LineSegmentParams, np.ndarray, str]],
+                             name, number, hidden: set[int] = frozenset(), cut: np.ndarray | None = None):
+        """A frame of the animation before a step's frame: the face's points but the hidden ones, its lines as (line, points, color), and the cut, if any."""
+        fig, ax = self.new_frame(title)
+        self.draw_other_face(ax, face)
+        draw_points(ax, self.contours[face], colored, hidden)
+        for line, points, color in lines:
+            draw_line(ax, line, points, color=color, linewidth=2)
+        if cut is not None:
+            ax.plot(cut[:, 1], cut[:, 0], '-', color=CUT_COLOR, linewidth=5, zorder=4)
+        self.save(fig, f"{face}_{name}", number)
 
     def draw_result(self, face, result: FitResult):
         self.results[face] = result
@@ -183,14 +216,14 @@ class DrawingFitter(Fitter):
         fig.subplots_adjust(left=0.02, right=0.98, top=0.91, bottom=0.02)
         return fig, ax
 
-    def save(self, fig, name, move=None):
-        """Frame NN_name.png. The moves of a junctions step come before its frame NN, as NN_01_name.png, NN_02_name.png, ...: a digit sorts before a letter."""
-        if move is None:
+    def save(self, fig, name, number=None):
+        """Frame NN_name.png. The animation before a step's frame NN comes as NN_01_name.png, NN_02_name.png, ...: a digit sorts before a letter."""
+        if number is None:
             self.frames_count += 1
             stem = f"{self.frames_count:02d}_{name}"
         else:
-            self.moves_count += 1
-            stem = f"{self.frames_count + 1:02d}_{move:02d}_{name}"
+            self.animation_frames_count += 1
+            stem = f"{self.frames_count + 1:02d}_{number:02d}_{name}"
         fig.savefig(FRAMES_DIR / f"{stem}.png", dpi=100)  # 600x600, as frame 00
         plt.close(fig)
 
@@ -200,7 +233,7 @@ def draw_frames():
     fitter = DrawingFitter()
     left, right = stitch_faces(fitter)
     fitter.draw_polygons("Final polygons", {"left": left, "right": right}, "final")
-    print(f"Saved {fitter.frames_count} frames and {fitter.moves_count} junction moves to {FRAMES_DIR}")
+    print(f"Saved {fitter.frames_count} frames and {fitter.animation_frames_count} animation frames to {FRAMES_DIR}")
 
 
 def remove_old_frames() -> None:
@@ -240,11 +273,12 @@ def draw_polygon(ax, face, polygon: np.ndarray, with_vertices=True, linewidth=2)
     ax.plot(polygon[:, 1], polygon[:, 0], '-o' if with_vertices else '-', color=FACE_COLORS[face], linewidth=linewidth, markersize=4, zorder=3)
 
 
-def draw_points(ax, contour: np.ndarray, colored: list[tuple[set[int], str]]) -> None:
-    """A face's points: each segment's in its color; the points of no segment white."""
-    ax.plot(contour[:, 1], contour[:, 0], 'o', color=ORPHAN_COLOR, markersize=6)
+def draw_points(ax, contour: np.ndarray, colored: list[tuple[set[int], str]], hidden: set[int] = frozenset()) -> None:
+    """A face's points: each segment's in its color; the points of no segment white. The hidden points not at all: they blink."""
+    shown = [i for i in range(len(contour)) if i not in hidden]
+    ax.plot(contour[shown, 1], contour[shown, 0], 'o', color=ORPHAN_COLOR, markersize=6)
     for indices, color in colored:
-        points = contour[sorted(indices)]
+        points = contour[sorted(indices - hidden)]
         ax.plot(points[:, 1], points[:, 0], 'o', color=color, markersize=6)
 
 
@@ -254,6 +288,18 @@ def draw_rings(ax, points: np.ndarray) -> None:
 
 def color_name(color: str) -> str:
     return color.removeprefix("tab:")
+
+
+def blinking(indices: set[int]) -> list[set[int]]:
+    """The hidden points of a blink's frames: off, on, off, on, ..."""
+    return [indices, set()] * BLINKS
+
+
+def cut_line(p: np.ndarray, q: np.ndarray) -> np.ndarray:
+    """A short line across the contour, between its neighboring points p and q: its two ends, (2, 2)."""
+    along = (q - p) / np.linalg.norm(q - p)
+    across = np.array([-along[1], along[0]])
+    return (p + q) / 2 + np.outer([-CUT_LENGTH / 2, CUT_LENGTH / 2], across)
 
 
 def point_indices(segment: SequenceSegment) -> set[int]:
