@@ -17,6 +17,7 @@ FRAMES_DIR = HERE / "frames"
 GIF_PATH = HERE / "brep_demo.gif"
 MP4_PATH = HERE / "brep_demo.mp4"
 SECONDS_PER_FRAME = 1
+SECONDS_FINAL_FRAME = 3  # the final polygons
 SECONDS_PER_ANIMATION_FRAME = 0.2  # junction moves and splits: draw_frames.py names the animation before a step's frame NN NN_01_*.png, NN_02_*.png, ...
 MP4_FPS = 25  # a fixed frame rate: each frame repeated for its duration
 
@@ -25,6 +26,7 @@ def make_video():
     paths = sorted(FRAMES_DIR.glob("*.png"))
     frames = [Image.open(path).convert("RGB") for path in paths]
     durations = [SECONDS_PER_ANIMATION_FRAME if path.stem.split("_")[1].isdigit() else SECONDS_PER_FRAME for path in paths]
+    durations[-1] = SECONDS_FINAL_FRAME
     write_gif(frames, durations, GIF_PATH)
     write_mp4(frames, durations, MP4_PATH)
 
