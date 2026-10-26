@@ -9,10 +9,13 @@ Draws the video's frames, from 01 on, into frames/: runs stitch_faces() with a f
 
 Below the title, every frame shows the Energy of each face as the frame shows it, and their sum.
 """
+import sys
 from functools import partial
 from pathlib import Path
 from unittest.mock import patch
 HERE = Path(__file__).resolve().parent
+DEMO_DIR = HERE.parent  # stitch_faces.py and generation/
+sys.path.insert(0, str(DEMO_DIR))  # for import stitch_faces
 
 import numpy as np
 from PIL import Image
@@ -24,7 +27,7 @@ from mask2polymin.energy import energy
 import stitch_faces
 from stitch_faces import FACES, load_contours
 
-FACE_COLORS = {"left": "tab:red", "right": "tab:blue"}  # as in generation/extract_contours.py
+FACE_COLORS = {"left": "tab:red", "right": "tab:blue"}  # as in ../generation/extract_contours.py
 SEGMENT_COLORS = ("tab:orange", "tab:green", "tab:purple", "tab:brown", "tab:pink", "tab:olive", "tab:cyan")  # no red or blue: the faces have them
 SHARED_LINE_COLOR = "black"  # only in the matching edge's frames
 FROZEN_RING_COLOR = "white"  # rings around the points of the segment being frozen, only in its freezing frame
@@ -32,9 +35,9 @@ ORPHAN_COLOR = "white"  # contour points that belong to no segment
 CUT_COLOR = "red"  # the cut across the contour at a split place, during the split's animation
 CUT_LENGTH = 2.5  # px
 BLINKS = 2  # off and on again, per blink
-MASKS_DIR = HERE / "generation"  # left_mask.bmp and right_mask.bmp: the background of every frame, as in frame 00
+MASKS_DIR = DEMO_DIR / "generation"  # left_mask.bmp and right_mask.bmp: the background of every frame, as in frame 00
 FRAMES_DIR = HERE / "frames"
-FIRST_FRAME = "00_contours.png"  # from generation/extract_contours.py
+FIRST_FRAME = "00_contours.png"  # from ../generation/extract_contours.py
 VIEW_MARGIN = 3  # px around the contours
 
 STEP_TITLES = {  # split and merge name the segments by their colors: see draw_step()

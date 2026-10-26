@@ -4,7 +4,7 @@ Makes the video from the frames in frames/, in order, each step shown for the sa
 1. a GIF, for the README: plays inline on GitHub and on PyPI;
 2. an MP4 (H.264), for LinkedIn, which plays native video in the feed but may post an animated GIF as a still image.
 
-Run after generation/extract_contours.py (frame 00) and draw_frames.py (the other frames).
+Run after ../generation/extract_contours.py (frame 00) and draw_frames.py (the other frames).
 """
 from pathlib import Path
 HERE = Path(__file__).resolve().parent

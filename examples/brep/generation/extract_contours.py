@@ -3,7 +3,7 @@ Extracts the demo's input from the two noisy face masks written by generate_mask
 
 1. Extract each face's contour with skimage.measure.find_contours.
 2. Save them as contours.npz next to this script, arrays `left` and `right`, (N, 2) in (row, col): the only input of the demo.
-3. Draw the masks and their contours: the first frame of the video, examples/brep/frames/00_contours.png.
+3. Draw the masks and their contours: the first frame of the video, examples/brep/video_making/frames/00_contours.png.
 
 Run once, after generate_masks.py; contours.npz is committed.
 """
@@ -18,7 +18,7 @@ import matplotlib.pyplot as plt
 
 FACES = ("left", "right")
 FACE_COLORS = {"left": "tab:red", "right": "tab:blue"}
-FRAME_PATH = HERE.parent / "frames" / "00_contours.png"
+FRAME_PATH = HERE.parent / "video_making" / "frames" / "00_contours.png"
 VIEW_MARGIN = 3  # px around the contours
 
 
