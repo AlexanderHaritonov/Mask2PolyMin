@@ -19,7 +19,7 @@ from stitch_faces import FACES, load_contours, stitch_faces
 FACE_COLORS = {"left": "tab:red", "right": "tab:blue"}  # as in generation/extract_contours.py
 SEGMENT_COLORS = ("tab:orange", "tab:green", "tab:purple", "tab:brown", "tab:pink", "tab:olive", "tab:cyan")  # no red or blue: the faces have them
 SHARED_LINE_COLOR = "black"  # only in the matching edge's frames
-FROZEN_RING_COLOR = "white"  # rings around the points of a frozen segment
+FROZEN_RING_COLOR = "white"  # rings around the points of the segment being frozen, only in its freezing frame
 ORPHAN_COLOR = "white"  # contour points that belong to no segment
 BACKGROUND = (0.7, 0.7, 0.7)  # the gray of frame 00
 FRAMES_DIR = HERE / "frames"
@@ -41,7 +41,8 @@ class DrawingFitter(Fitter):
         super().__init__()
         self.contours = load_contours()
         self.results = {}  # each face's latest result
-        self.colored = {}  # each face's segments in its latest frame, as (point indices, color)
+        self.colored = {}  # each face's segments in its latest frame, as (point indices, color): the face stays so in the other face's frames
+        self.new_colors = iter(SEGMENT_COLORS)  # each new segment takes the next one, so no two segments share a color, across both faces
         self.round = 0  # 0 during fit()
         self.frames_count = 0
 
@@ -64,9 +65,11 @@ class DrawingFitter(Fitter):
         """on_step of fit() and refit(). The start of refit() is the segmentation with the newly frozen segment."""
         previous_colors = {color for _, color in self.colored.get(face, [])}
         colors = self.segment_colors(face, segments)
+        frozen_points = None
         if kind == "start" and self.round > 0:
-            frozen = next(color for color, segment in zip(colors, segments) if segment.frozen)
-            step = f"freezing the {color_name(frozen)} segment"
+            frozen = next(i for i, segment in enumerate(segments) if segment.frozen)
+            step = f"freezing the {color_name(colors[frozen])} segment"
+            frozen_points = segments[frozen].points()
         elif kind == "split":  # the half with a color from the previous frame is the old segment
             old, new = sorted(colors[index:index + 2], key=lambda color: color not in previous_colors)
             step = f"{color_name(new)} split off the {color_name(old)} segment"
@@ -76,21 +79,26 @@ class DrawingFitter(Fitter):
             step = STEP_TITLES[kind]
         fig, ax = new_frame(f"{face.capitalize()}: {step}", self.contours)
         self.draw_other_face(ax, face)
-        draw_segments(ax, self.contours[face], segments, colors, with_lines=True)
+        draw_points(ax, self.contours[face], self.colored[face])
+        if frozen_points is not None:
+            draw_rings(ax, frozen_points)
+        for segment, color in zip(segments, colors):  # the lines have no start and end points during the steps
+            draw_line(ax, segment.line_segment_params, segment.points(), color=color, linewidth=2)
         self.save(fig, f"{face}_{kind.replace(' ', '_')}")
 
     def draw_result(self, face, result: FitResult):
         self.results[face] = result
+        self.segment_colors(face, result.segments)
         fig, ax = new_frame(f"{face.capitalize()}: resulting polygon", self.contours)
         self.draw_other_face(ax, face)
-        draw_segments(ax, self.contours[face], result.segments, self.segment_colors(face, result.segments), with_lines=False)
+        draw_points(ax, self.contours[face], self.colored[face])
         draw_polygon(ax, face, result.polygon)
         self.save(fig, f"{face}_result")
 
     def draw_shared_line(self):
         """Both faces with their latest polygons, and the shared line through the points of their frozen segments."""
         fig, ax = new_frame(f"Round {self.round}: matching edge", self.contours)
-        draw_both_faces(ax, self.contours, self.results)
+        self.draw_both_faces(ax, self.results)
         frozen = [segment for face in FACES for segment in self.results[face].segments if segment.frozen]
         points = np.concatenate([segment.points() for segment in frozen])
         draw_line(ax, frozen[0].line_segment_params, points, color=SHARED_LINE_COLOR, linewidth=5, zorder=1)
@@ -98,20 +106,30 @@ class DrawingFitter(Fitter):
 
     def draw_final(self, results: dict[str, FitResult]):
         fig, ax = new_frame("Final polygons", self.contours)
-        draw_both_faces(ax, self.contours, results)
+        self.draw_both_faces(ax, results)
         self.save(fig, "final")
 
+    def draw_both_faces(self, ax, results: dict[str, FitResult]):
+        """Both faces' points as in their latest frames, and their polygons."""
+        for face in FACES:
+            draw_points(ax, self.contours[face], self.colored[face])
+            draw_polygon(ax, face, results[face].polygon)
+
     def draw_other_face(self, ax, face):
-        """The other face as it stands: its contour points, and its latest polygon once it has one."""
+        """The other face's points as in its latest frame, and its latest polygon once it has one.
+        Before its first frame, its points in the face's color, as in frame 00."""
         other = next(f for f in FACES if f != face)
-        result = self.results.get(other)
-        draw_face_points(ax, other, self.contours[other], alpha=0.4)
-        if result is not None:
-            draw_polygon(ax, other, result.polygon)
+        if other in self.colored:
+            draw_points(ax, self.contours[other], self.colored[other])
+        else:
+            draw_face_points(ax, other, self.contours[other])
+        if other in self.results:
+            draw_polygon(ax, other, self.results[other].polygon)
 
     def segment_colors(self, face, segments: list[SequenceSegment]) -> list[str]:
         """Colors that stay with the points: each segment keeps the color of the segment in the face's latest frame it shares the most points with,
-        e.g. the larger half of a split. The others get a color no segment of the face has."""
+        e.g. the larger half of a split. The others get a new color, which no segment of either face had before.
+        Kept in self.colored[face]."""
         # before the face's first frame, all its points have the face's color, as in frame 00
         previous = self.colored.get(face, [(set(range(len(self.contours[face]))), FACE_COLORS[face])])
         indices = [point_indices(segment) for segment in segments]
@@ -122,7 +140,7 @@ class DrawingFitter(Fitter):
                 colors[i] = color
         for i in range(len(colors)):
             if colors[i] is None:
-                colors[i] = next(color for color in SEGMENT_COLORS if color not in colors)
+                colors[i] = next(self.new_colors)
         self.colored[face] = list(zip(indices, colors))
         return colors
 
@@ -166,33 +184,24 @@ def new_frame(title: str, contours: dict):
     return fig, ax
 
 
-def draw_face_points(ax, face, contour: np.ndarray, alpha=1.0) -> None:
-    ax.plot(contour[:, 1], contour[:, 0], 'o', color=FACE_COLORS[face], markersize=6, alpha=alpha)
+def draw_face_points(ax, face, contour: np.ndarray) -> None:
+    ax.plot(contour[:, 1], contour[:, 0], 'o', color=FACE_COLORS[face], markersize=6)
 
 
 def draw_polygon(ax, face, polygon: np.ndarray) -> None:
     ax.plot(polygon[:, 1], polygon[:, 0], '-o', color=FACE_COLORS[face], linewidth=2, markersize=4, zorder=3)
 
 
-def draw_segments(ax, contour: np.ndarray, segments: list[SequenceSegment], colors: list[str], with_lines: bool) -> None:
-    """Each segment's points in its color; a frozen segment's points in white rings.
-    with_lines: each segment's line too, in its color.
-    The lines have no start and end points during the steps."""
+def draw_points(ax, contour: np.ndarray, colored: list[tuple[set[int], str]]) -> None:
+    """A face's points: each segment's in its color; the points of no segment white."""
     ax.plot(contour[:, 1], contour[:, 0], 'o', color=ORPHAN_COLOR, markersize=6)
-    for segment, color in zip(segments, colors):
-        points = segment.points()
+    for indices, color in colored:
+        points = contour[sorted(indices)]
         ax.plot(points[:, 1], points[:, 0], 'o', color=color, markersize=6)
-        if segment.frozen:
-            ax.plot(points[:, 1], points[:, 0], 'o', markerfacecolor='none', markeredgecolor=FROZEN_RING_COLOR, markersize=11, markeredgewidth=1.5)
-        if with_lines:
-            draw_line(ax, segment.line_segment_params, points, color=color, linewidth=2)
 
 
-def draw_both_faces(ax, contours: dict, results: dict[str, FitResult]) -> None:
-    """Both faces with their contour points and polygons."""
-    for face in FACES:
-        draw_face_points(ax, face, contours[face])
-        draw_polygon(ax, face, results[face].polygon)
+def draw_rings(ax, points: np.ndarray) -> None:
+    ax.plot(points[:, 1], points[:, 0], 'o', markerfacecolor='none', markeredgecolor=FROZEN_RING_COLOR, markersize=11, markeredgewidth=1.5)
 
 
 def color_name(color: str) -> str:
