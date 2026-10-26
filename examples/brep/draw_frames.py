@@ -19,6 +19,7 @@ from stitch_faces import FACES, load_contours, stitch_faces
 FACE_COLORS = {"left": "tab:red", "right": "tab:blue"}  # as in generation/extract_contours.py
 SEGMENT_COLORS = ("tab:orange", "tab:green", "tab:purple", "tab:brown", "tab:pink", "tab:olive", "tab:cyan")  # no red or blue: the faces have them
 SHARED_LINE_COLOR = "black"  # only in the matching edge's frames
+FROZEN_RING_COLOR = "white"  # rings around the points of a frozen segment
 ORPHAN_COLOR = "white"  # contour points that belong to no segment
 BACKGROUND = (0.7, 0.7, 0.7)  # the gray of frame 00
 FRAMES_DIR = HERE / "frames"
@@ -174,13 +175,15 @@ def draw_polygon(ax, face, polygon: np.ndarray) -> None:
 
 
 def draw_segments(ax, contour: np.ndarray, segments: list[SequenceSegment], colors: list[str], with_lines: bool) -> None:
-    """Each segment's points in its color.
+    """Each segment's points in its color; a frozen segment's points in white rings.
     with_lines: each segment's line too, in its color.
     The lines have no start and end points during the steps."""
     ax.plot(contour[:, 1], contour[:, 0], 'o', color=ORPHAN_COLOR, markersize=6)
     for segment, color in zip(segments, colors):
         points = segment.points()
         ax.plot(points[:, 1], points[:, 0], 'o', color=color, markersize=6)
+        if segment.frozen:
+            ax.plot(points[:, 1], points[:, 0], 'o', markerfacecolor='none', markeredgecolor=FROZEN_RING_COLOR, markersize=11, markeredgewidth=1.5)
         if with_lines:
             draw_line(ax, segment.line_segment_params, points, color=color, linewidth=2)
 
