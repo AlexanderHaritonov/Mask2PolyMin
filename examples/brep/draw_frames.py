@@ -7,6 +7,7 @@ Draws the video's frames, from 01 on, into frames/: runs stitch_faces() with a f
 2. per round of the outer loop: the shared line, then the frozen segment at the start of each face's refit();
 3. the final polygons.
 
+Below the title, every frame shows the Energy of each face as the frame shows it, and their sum.
 """
 from functools import partial
 from pathlib import Path
@@ -18,6 +19,7 @@ import matplotlib.colors
 import matplotlib.pyplot as plt
 
 from mask2polymin import FitterToPointsSequence as Fitter, FitResult, LineSegmentParams, SequenceSegment, fit_line
+from mask2polymin.energy import energy
 from stitch_faces import FACES, load_contours, stitch_faces
 
 FACE_COLORS = {"left": "tab:red", "right": "tab:blue"}  # as in generation/extract_contours.py
@@ -46,10 +48,11 @@ class DrawingFitter(Fitter):
 
     def __init__(self):
         super().__init__()
-        self.contours = load_contours()
+        self.contours = {face: without_closing_duplicate(contour) for face, contour in load_contours().items()}  # point indices refer to these
         self.background = masks_image()
         self.results = {}  # each face's latest result
         self.colored = {}  # each face's segments in its latest frame, as (point indices, color): the face stays so in the other face's frames
+        self.energies = {}  # each face's Energy in its latest frame
         self.new_colors = iter(SEGMENT_COLORS)  # each new segment takes the next one, so no two segments share a color, across both faces
         self.round = 0  # 0 during fit()
         self.frames_count = 0
@@ -93,18 +96,21 @@ class DrawingFitter(Fitter):
             self.draw_splitting(face, previous, segments, colors, index, old, title)
         elif kind == "junctions":
             self.draw_moves(face, previous, segments, colors)
+        lines = [(segment.line_segment_params, segment.points(), color) for segment, color in zip(segments, colors)]
+        self.energies[face] = self.face_energy(face, self.colored[face], lines)
         fig, ax = self.new_frame(title)
         self.draw_other_face(ax, face)
         draw_points(ax, self.contours[face], self.colored[face])
         if frozen_points is not None:
             draw_rings(ax, frozen_points)
-        for segment, color in zip(segments, colors):  # the lines have no start and end points during the steps
-            draw_line(ax, segment.line_segment_params, segment.points(), color=color, linewidth=2)
+        for line, points, color in lines:  # the lines have no start and end points during the steps
+            draw_line(ax, line, points, color=color, linewidth=2)
         self.save(fig, f"{face}_{kind.replace(' ', '_')}")
 
     def draw_moves(self, face, previous: list[tuple[set[int], str]], segments: list[SequenceSegment], colors: list[str]):
         """A junctions step point by point: one frame per point that changes segments, except the last, which the step's own frame shows.
-        The point takes its new segment's color, or white as an orphan, and each line is fitted to its segment's points again; a frozen segment keeps its line."""
+        The point takes its new segment's color, or white as an orphan, and each line is fitted to its segment's points again; a frozen segment keeps its line.
+        The face's Energy stays at the step's start until the step's own frame: the moves are a reconstruction, not the fitter's path, and on the way it may rise."""
         contour = self.contours[face]
         frozen_lines = {color: segment.line_segment_params for segment, color in zip(segments, colors) if segment.frozen}
         moves = junction_moves(owner_colors(previous), owner_colors(self.colored[face]), len(contour))
@@ -132,12 +138,14 @@ class DrawingFitter(Fitter):
                   + [(splitting, previous, lines_before, set(), cut)]
                   + [(title, self.colored[face], lines_after, hidden, cut) for hidden in [set()] + blinking(split_off)])
         for number, (frame_title, colored, lines, hidden, frame_cut) in enumerate(frames, start=1):
-            self.draw_animation_frame(face, frame_title, colored, lines, "splitting", number, hidden, frame_cut)
+            energies = self.energies | {face: self.face_energy(face, colored, lines)}  # the old segmentation's, then the split's
+            self.draw_animation_frame(face, frame_title, colored, lines, "splitting", number, hidden, frame_cut, energies)
 
     def draw_animation_frame(self, face, title, colored: list[tuple[set[int], str]], lines: list[tuple[LineSegmentParams, np.ndarray, str]],
-                             name, number, hidden: set[int] = frozenset(), cut: np.ndarray | None = None):
-        """A frame of the animation before a step's frame: the face's points but the hidden ones, its lines as (line, points, color), and the cut, if any."""
-        fig, ax = self.new_frame(title)
+                             name, number, hidden: set[int] = frozenset(), cut: np.ndarray | None = None, energies: dict[str, float] | None = None):
+        """A frame of the animation before a step's frame: the face's points but the hidden ones, its lines as (line, points, color), and the cut, if any.
+        energies: as in new_frame()."""
+        fig, ax = self.new_frame(title, energies)
         self.draw_other_face(ax, face)
         draw_points(ax, self.contours[face], colored, hidden)
         for line, points, color in lines:
@@ -148,6 +156,7 @@ class DrawingFitter(Fitter):
 
     def draw_result(self, face, result: FitResult):
         self.results[face] = result
+        self.energies[face] = result.energy(self.config.tolerance, self.config.segment_cost)
         self.segment_colors(face, result.segments)
         fig, ax = self.new_frame(f"{face.capitalize()}: resulting polygon")
         self.draw_other_face(ax, face)
@@ -202,16 +211,25 @@ class DrawingFitter(Fitter):
         self.colored[face] = list(zip(indices, colors))
         return colors
 
-    def face_of(self, points_sequence) -> str:
-        return next(face for face in FACES if np.array_equal(self.contours[face], points_sequence))
+    def face_energy(self, face, colored: list[tuple[set[int], str]], lines: list[tuple[LineSegmentParams, np.ndarray, str]]) -> float:
+        """As FitResult.energy(): the squared distances of each line's points to it, the face's orphans, its segments in colored."""
+        sse = sum(float(line.squared_distances_to_line(points).sum()) for line, points, _ in lines)
+        orphans_count = len(self.contours[face]) - sum(len(indices) for indices, _ in colored)
+        return energy(sse, orphans_count, len(colored), self.config.tolerance, self.config.segment_cost)
 
-    def new_frame(self, title: str):
-        """A frame like frame 00: the masks as background, title, margins, view."""
+    def face_of(self, points_sequence) -> str:
+        return next(face for face in FACES if np.array_equal(self.contours[face], without_closing_duplicate(points_sequence)))
+
+    def new_frame(self, title: str, energies: dict[str, float] | None = None):
+        """A frame like frame 00: the masks as background, title, margins, view.
+        Below the title, the faces' energies: by default as in their latest frames."""
         fig, ax = plt.subplots(figsize=(6, 6))
         height, width = self.background.shape[:2]
         ax.imshow(self.background, extent=(-0.5, width - 0.5, height - 0.5, -0.5))  # pixel centers at integer coordinates, as find_contours assumes
         set_view(ax, self.contours)
         fig.suptitle(title, fontsize=12, fontweight='bold')
+        energies = self.energies if energies is None else energies
+        fig.text(0.5, 0.935, energy_line(energies), ha='center', va='center', fontsize=10)  # between the title and the view, which stays where frame 00 has it
         ax.axis('off')
         fig.subplots_adjust(left=0.02, right=0.98, top=0.91, bottom=0.02)
         return fig, ax
@@ -242,6 +260,11 @@ def remove_old_frames() -> None:
     for path in FRAMES_DIR.glob("*.png"):
         if path.name != FIRST_FRAME:
             path.unlink()
+
+
+def without_closing_duplicate(contour: np.ndarray) -> np.ndarray:
+    """The contour without its last point if that repeats the first, as the fitter takes a closed contour."""
+    return contour[:-1] if np.array_equal(contour[0], contour[-1]) else contour
 
 
 def masks_image() -> np.ndarray:
@@ -288,6 +311,15 @@ def draw_rings(ax, points: np.ndarray) -> None:
 
 def color_name(color: str) -> str:
     return color.removeprefix("tab:")
+
+
+def energy_line(energies: dict[str, float]) -> str:
+    """E_Left, E_Right and their sum; a dash for a face before its first frame, and for the sum then."""
+    def value(e):
+        return "–" if e is None else f"{e:.2f}"
+    total = sum(energies.values()) if len(energies) == len(FACES) else None
+    parts = [rf"$E_\mathrm{{{face.capitalize()}}}$: {value(energies.get(face))}" for face in FACES] + [rf"$\Sigma E$: {value(total)}"]
+    return "      ".join(parts)
 
 
 def blinking(indices: set[int]) -> list[set[int]]:
