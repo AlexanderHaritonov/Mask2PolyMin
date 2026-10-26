@@ -56,6 +56,7 @@ class DrawingFitter(Fitter):
         face = self.face_of(points_sequence)
         if face == FACES[0]:
             self.round += 1
+            self.draw_polygons(f"Round {self.round}", self.results, "round")
             self.draw_shared_line()
         result = super().refit(points_sequence, previous, is_closed, on_step=partial(self.draw_step, face))
         self.draw_result(face, result)
@@ -98,22 +99,20 @@ class DrawingFitter(Fitter):
     def draw_shared_line(self):
         """Both faces with their latest polygons, and the shared line through the points of their frozen segments."""
         fig, ax = new_frame(f"Round {self.round}: matching edge", self.contours)
-        self.draw_both_faces(ax, self.results)
+        for face in FACES:
+            draw_points(ax, self.contours[face], self.colored[face])
+            draw_polygon(ax, face, self.results[face].polygon)
         frozen = [segment for face in FACES for segment in self.results[face].segments if segment.frozen]
         points = np.concatenate([segment.points() for segment in frozen])
         draw_line(ax, frozen[0].line_segment_params, points, color=SHARED_LINE_COLOR, linewidth=5, zorder=1)
         self.save(fig, "shared_line")
 
-    def draw_final(self, results: dict[str, FitResult]):
-        fig, ax = new_frame("Final polygons", self.contours)
-        self.draw_both_faces(ax, results)
-        self.save(fig, "final")
-
-    def draw_both_faces(self, ax, results: dict[str, FitResult]):
-        """Both faces' points as in their latest frames, and their polygons."""
+    def draw_polygons(self, title: str, results: dict[str, FitResult], name: str):
+        """Only the polygons' lines, thicker: no points, no vertices. At the start of each round, and at the end."""
+        fig, ax = new_frame(title, self.contours)
         for face in FACES:
-            draw_points(ax, self.contours[face], self.colored[face])
-            draw_polygon(ax, face, results[face].polygon)
+            draw_polygon(ax, face, results[face].polygon, with_vertices=False, linewidth=4)
+        self.save(fig, name)
 
     def draw_other_face(self, ax, face):
         """The other face's points as in its latest frame, and its latest polygon once it has one.
@@ -157,7 +156,7 @@ def draw_frames():
     remove_old_frames()
     fitter = DrawingFitter()
     left, right = stitch_faces(fitter)
-    fitter.draw_final({"left": left, "right": right})
+    fitter.draw_polygons("Final polygons", {"left": left, "right": right}, "final")
     print(f"Saved {fitter.frames_count} frames to {FRAMES_DIR}")
 
 
@@ -188,8 +187,8 @@ def draw_face_points(ax, face, contour: np.ndarray) -> None:
     ax.plot(contour[:, 1], contour[:, 0], 'o', color=FACE_COLORS[face], markersize=6)
 
 
-def draw_polygon(ax, face, polygon: np.ndarray) -> None:
-    ax.plot(polygon[:, 1], polygon[:, 0], '-o', color=FACE_COLORS[face], linewidth=2, markersize=4, zorder=3)
+def draw_polygon(ax, face, polygon: np.ndarray, with_vertices=True, linewidth=2) -> None:
+    ax.plot(polygon[:, 1], polygon[:, 0], '-o' if with_vertices else '-', color=FACE_COLORS[face], linewidth=linewidth, markersize=4, zorder=3)
 
 
 def draw_points(ax, contour: np.ndarray, colored: list[tuple[set[int], str]]) -> None:
