@@ -11,6 +11,7 @@ Below the title, every frame shows the Energy of each face as the frame shows it
 """
 from functools import partial
 from pathlib import Path
+from unittest.mock import patch
 HERE = Path(__file__).resolve().parent
 
 import numpy as np
@@ -20,7 +21,8 @@ import matplotlib.pyplot as plt
 
 from mask2polymin import FitterToPointsSequence as Fitter, FitResult, LineSegmentParams, SequenceSegment, fit_line
 from mask2polymin.energy import energy
-from stitch_faces import FACES, load_contours, stitch_faces
+import stitch_faces
+from stitch_faces import FACES, load_contours
 
 FACE_COLORS = {"left": "tab:red", "right": "tab:blue"}  # as in generation/extract_contours.py
 SEGMENT_COLORS = ("tab:orange", "tab:green", "tab:purple", "tab:brown", "tab:pink", "tab:olive", "tab:cyan")  # no red or blue: the faces have them
@@ -249,8 +251,9 @@ class DrawingFitter(Fitter):
 def draw_frames():
     remove_old_frames()
     fitter = DrawingFitter()
-    left, right = stitch_faces(fitter)
-    fitter.draw_polygons("Final polygons", {"left": left, "right": right}, "final")
+    with patch.object(stitch_faces, "Fitter", lambda: fitter):  # stitch_faces() makes its own Fitter(): so stitch_faces.py stays a plain usage example
+        stitch_faces.stitch_faces()
+    fitter.draw_polygons("Final polygons", fitter.results, "final")  # the last refit() of each face
     print(f"Saved {fitter.frames_count} frames and {fitter.animation_frames_count} animation frames to {FRAMES_DIR}")
 
 
