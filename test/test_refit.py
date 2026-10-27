@@ -487,7 +487,7 @@ def test_guard_keeps_the_key_when_it_returns_the_start(monkeypatch):
 # ---- guard ----
 
 def energy(result, config):
-    return result.energy(config.tolerance, config.segment_cost)
+    return result.energy(config)
 
 
 @pytest.mark.parametrize("guard", [True, False])

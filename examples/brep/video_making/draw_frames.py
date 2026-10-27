@@ -161,7 +161,7 @@ class DrawingFitter(Fitter):
 
     def draw_result(self, face, result: FitResult):
         self.results[face] = result
-        self.energies[face] = result.energy(self.config.tolerance, self.config.segment_cost)
+        self.energies[face] = result.energy(self.config)
         self.segment_colors(face, result.segments)
         fig, ax = self.new_frame(f"{face.capitalize()}: resulting polygon")
         self.draw_other_face(ax, face)

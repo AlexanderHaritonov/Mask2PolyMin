@@ -92,6 +92,20 @@ The `1.0` floor covers ordinary pixel-quantization jitter present even in a "cle
 `Energy = SSE + tolerance² · orphans_count + segment_cost · tolerance² · segments_count`\
 An orphan costs as much as a point at distance `tolerance`. Higher values give fewer segments.
 
+**energy** (default `None`): your own Energy, used instead of the built-in one; `segment_cost` is then not used.
+
+Merges and junction moves then compare the Energy of the whole segmentation.
+With an energy as fast as the built-in one, `fit()` takes about 10% longer.
+```python
+from mask2polymin import FitterToPointsSequence, FitterConfig
+from mask2polymin.energy import orphans_count, segment_sse
+
+def my_energy(segments) -> float:
+    return sum(segment_sse(s) for s in segments) + orphans_count(segments) + 5 * len(segments)
+
+fitter = FitterToPointsSequence(FitterConfig(energy=my_energy))
+```
+
 **rank_split_by_max_deviation** (default `False`)
 Pass True to slightly improve simpler shapes (low segments count, enough space between opposite sides). Can damage complex shapes.
 

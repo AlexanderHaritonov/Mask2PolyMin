@@ -12,9 +12,10 @@ All notable changes to this project are documented here.
 
 ### Added
 - `FitterConfig.segment_cost` (default `2`): the cost of one segment in the Energy, in units of `tolerance²`.
+- `FitterConfig.energy`: your own Energy, `energy(segments) -> float`, instead of the built-in one.
 - `refit()`: fit again, starting from a previous `FitResult`, with segments pinned to given lines. See the README.
 - `on_step` keyword of `fit()` and `refit()`: an observer, called after each step of the fit, e.g. to draw it.
-- `FitResult`, returned by `fit()` and `refit()`: unpacks as `polygon, segments`, and has `sse()`, `orphans_count()` and `energy()`.
+- `FitResult`, returned by `fit()` and `refit()`: unpacks as `polygon, segments`, and has `sse()`, `orphans_count()` and `energy(config)`.
 - `SequenceSegment.frozen` and `SequenceSegment.freeze(point, direction, key=None)`. `refit()` keeps the key, and `FitResult.frozen[key]` finds the frozen segment in its result.
 - `SequenceSegment.points()`: the segment's points. `fit_line(points)`: the line through any points, fitted same way the fitter fits a segment.
 

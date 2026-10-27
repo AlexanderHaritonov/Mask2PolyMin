@@ -41,7 +41,7 @@ def stitch_faces():
         segment_on_left = left.frozen["shared"]
         segment_on_right = right.frozen["shared"]
 
-        new_energy = left.energy(config.tolerance, config.segment_cost) + right.energy(config.tolerance, config.segment_cost)
+        new_energy = left.energy(config) + right.energy(config)
         drop = energy - new_energy
         energy = new_energy
 

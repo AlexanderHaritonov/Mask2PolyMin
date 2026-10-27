@@ -132,7 +132,7 @@ def test_energy_adds_sse_orphans_and_segments():
     ]
     result = FitResult(np.empty((0, 2)), segments)
     expected = result.sse() + 1.5 ** 2 * 3 + 15.0 * 1.5 ** 2 * 2
-    assert result.energy(tolerance=1.5, segment_cost=15.0) == pytest.approx(expected)
+    assert result.energy(FitterConfig(tolerance=1.5, segment_cost=15.0)) == pytest.approx(expected)
 
 
 # ---- SequenceSegment.frozen ----

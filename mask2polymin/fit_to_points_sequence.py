@@ -30,6 +30,9 @@ MAX_ORPHANS_PER_JUNCTION = 2
 ''' on_step(kind, segments, index) of fit() and refit(). '''
 StepCallback = Callable[[str, list[SequenceSegment], int | None], None]
 
+''' energy(segments) of FitterConfig. '''
+EnergyFunction = Callable[[list[SequenceSegment]], float]
+
 def _ignore_step(kind: str, segments: list[SequenceSegment], index: int | None) -> None:
     """The on_step when none is given."""
 
@@ -44,7 +47,7 @@ class FitterConfig:
     # tolerance_sq gates everything:
     #   - split eligibility: a segment is split when its mean or max squared point distance exceeds it;
     #   - global stop: the average SSE per segment must stay within it, i.e. each segment gets a budget of ~one tolerance-sized outlier;
-    #   - Energy: an orphan costs tolerance_sq and a segment segment_cost · tolerance_sq.
+    #   - the built-in Energy: an orphan costs tolerance_sq and a segment segment_cost · tolerance_sq.
     #
     tolerance: float = 1.0
 
@@ -57,11 +60,17 @@ class FitterConfig:
     ''' Plot the segmentation after every split (requires matplotlib). '''
     plot_intermediate_steps: bool = False
 
-    ''' Cost of one segment in the Energy, in units of tolerance². Higher values give fewer segments.
+    ''' Cost of one segment in the built-in Energy, in units of tolerance². Higher values give fewer segments.
     Energy = SSE + tolerance² · orphans_count + segment_cost · tolerance² · segments_count.
     fit() and refit() keep a split, merge or junction move only if it lowers the Energy.
     refit() never returns a higher Energy than its start. '''
     segment_cost: float = 2.0
+
+    ''' Your own Energy instead of the built-in one: energy(segments) -> float. segment_cost is then not used.
+    segments is a whole segmentation, as on_step gets it; its lines may have no start and end points yet.
+    mask2polymin.energy has segment_sse(segment) and orphans_count(segments).
+    tolerance still controls splitting, and the orphans a junction proposes. '''
+    energy: EnergyFunction | None = None
 
     def __post_init__(self):
         if self.max_segments_count < 1:
@@ -126,11 +135,9 @@ class FitterToPointsSequence:
         segments = self._merge_collinear_segments(segments_sequence)
         result = self._result_with_endpoints(segments)
 
-        if guard:
-            tolerance, segment_cost = self.config.tolerance, self.config.segment_cost
-            if result.energy(tolerance, segment_cost) > previous.energy(tolerance, segment_cost):
-                if self.config.verbose: print("refit() raised Energy; returning the start segmentation.")
-                return self._result_with_endpoints(self._clones_of(previous.segments))
+        if guard and result.energy(self.config) > previous.energy(self.config):
+            if self.config.verbose: print("refit() raised Energy; returning the start segmentation.")
+            return self._result_with_endpoints(self._clones_of(previous.segments))
         return result
 
     def _clones_of(self, segments: list[SequenceSegment]) -> list[SequenceSegment]:
@@ -219,6 +226,8 @@ class FitterToPointsSequence:
             segments = segmentation_after_split
 
     def _energy(self, segments: list[SequenceSegment]) -> float:
+        if self.config.energy is not None:
+            return self.config.energy(segments)
         sse = sum(segment_sse(segment) for segment in segments)
         return energy(sse, orphans_count(segments), len(segments), self.config.tolerance, self.config.segment_cost)
 
@@ -261,28 +270,33 @@ class FitterToPointsSequence:
                 first_index=a.first_index,
                 last_index=b.last_index,
                 line_segment_params=fit_range(self._moments, a.first_index, b.last_index, with_endpoints=False))
-            if self._merge_lowers_energy(a, b, merged):
+            if self._merge_lowers_energy(segments, i, merged):
                 # do the merge
                 if self.config.verbose:
                     print(f"Merged segments {i} and {(i+1) % n}")
-                if self.is_closed and i == n - 1:
-                    # Here the last and the first segment were merged (closed contour).
-                    # The list is a ring, so append the merged segment at the end and resume just before it.
-                    # The walk then checks exactly the two pairs involving merged segment.
-                    # All earlier pairs are unchanged and were already checked, so nothing is re-walked.
-                    segments = segments[1:-1] + [merged]
-                    self._on_step("merge", segments, len(segments) - 1)
-                    i = max(0, len(segments) - 2)
-                else:
-                    segments = segments[:i] + [merged] + segments[i+2:]
-                    self._on_step("merge", segments, i)
-                    i = max(0, i - 1)
+                segments, i = self._with_merged(segments, i, merged)
+                self._on_step("merge", segments, i)
+                i = max(0, i - 1)
             else:
                 i += 1
         return segments
 
-    def _merge_lowers_energy(self, a: SequenceSegment, b: SequenceSegment, merged: SequenceSegment) -> bool:
+    def _with_merged(self, segments: list[SequenceSegment], i: int, merged: SequenceSegment) -> tuple[list[SequenceSegment], int]:
+        """segments with segments i and i+1 replaced by merged, and the index of merged."""
+        n = len(segments)
+        if self.is_closed and i == n - 1:
+            # Here the last and the first segment are merged (closed contour).
+            # The list is a ring, so append the merged segment at the end and resume just before it.
+            # The walk then checks exactly the two pairs involving merged segment.
+            # All earlier pairs are unchanged and were already checked, so nothing is re-walked.
+            return segments[1:-1] + [merged], n - 2
+        return segments[:i] + [merged] + segments[i+2:], i
+
+    def _merge_lowers_energy(self, segments: list[SequenceSegment], i: int, merged: SequenceSegment) -> bool:
+        if self.config.energy is not None:
+            return self.config.energy(self._with_merged(segments, i, merged)[0]) < self.config.energy(segments)
         # A merge saves one segment's cost and the orphans between a and b, which the merged segment takes in.
+        a, b = segments[i], segments[(i + 1) % len(segments)]
         orphans = (b.first_index - a.last_index - 1) % len(self.whole_sequence)
         saved = self.config.segment_cost * self.config.tolerance_sq + orphans * self.config.tolerance_sq
         return segment_sse(merged) < segment_sse(a) + segment_sse(b) + saved
@@ -397,10 +411,13 @@ class FitterToPointsSequence:
         # Remember the state and skip the re-scoring.
         junction_last_scored_state = [None] * len(segments)
 
-        # A junction moves only if the energy of its two segments and its orphans drops.
+        # A junction moves only if the Energy drops.
+        # The built-in Energy is compared only over the junction's two segments and its orphans.
         n = len(self.whole_sequence)
 
         def junction_energy(previous_segment, next_segment) -> float:
+            if self.config.energy is not None:
+                return self.config.energy(segments)
             orphans = (next_segment.first_index - previous_segment.last_index - 1) % n
             return segment_sse(previous_segment) + segment_sse(next_segment) + orphans * self.config.tolerance_sq
 
