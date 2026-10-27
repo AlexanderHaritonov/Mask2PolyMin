@@ -18,6 +18,7 @@ All notable changes to this project are documented here.
 - `FitResult`, returned by `fit()` and `refit()`: unpacks as `polygon, segments, energy`, and has `sse()` and `orphans_count()`.
 - `SequenceSegment.frozen` and `SequenceSegment.freeze(point, direction, key=None)`. `refit()` keeps the key, and `FitResult.frozen[key]` finds the frozen segment in its result.
 - `SequenceSegment.points()`: the segment's points. `fit_line(points)`: the line through any points, fitted same way the fitter fits a segment.
+- `examples/brep/stitch_faces.py`: stitches two neighboring faces to share an edge. Its demo GIF is in the README.
 
 ## [0.2.0] - 2026-07-26
 

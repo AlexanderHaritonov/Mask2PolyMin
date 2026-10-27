@@ -29,9 +29,9 @@ Two neighboring faces fitted and stitched to share an edge.
 ## Motivation
 
 Useful for post‑processing bitmask segmentation outputs from models such as MaskRCNN or YOLO‑Seg, especially when regular or low‑complexity shapes are required:
-- obtaining simple geometric representations
-- to reconstruct artificial objects that consist of straight edges, sharp corners, and regular geometric properties.
-- use as the inner step of an energy minimization over neighboring faces (topological maps / B-rep) — see [`refit()`](#energy-minimization-with-refit)
+- to obtain simple geometric representations
+- to reconstruct artificial objects that consist of straight edges, sharp corners, and regular geometric properties
+- as the inner step of an energy minimization over neighboring faces (topological maps / B-rep) — see [`refit()`](#energy-minimization-with-refit)
 
 Unlike common point‑thinning algorithms (Ramer–Douglas–Peucker, Visvalingam–Whyatt, Zhang–Suen), this method:
 - minimizes segment count while preserving the raw shape
@@ -89,17 +89,20 @@ polygon, segments, energy = fitter.refit(contour, result, is_closed=True)  # sid
 The whole loop over two neighboring faces, as in the B-rep demo: [`examples/brep/stitch_faces.py`](https://github.com/AlexanderHaritonov/Mask2PolyMin/blob/main/examples/brep/stitch_faces.py).
 
 ## Tuning Parameters
-**max_segments_count** (default `18`): Upper limit on the number of segments in the output polygon. Keeping this bound relatively tight prevents over-fitting to noise and generally improves reconstructed shape accuracy.
+```python
+fitter = Fitter(FitterConfig(tolerance=2.0, segment_cost=3))
+```
+**`max_segments_count`** (default `18`): Upper limit on the number of segments in the output polygon. Keeping this bound relatively tight prevents over-fitting to noise and generally improves reconstructed shape accuracy.
 
 **`tolerance`** (default `1.0`): the maximum perpendicular deviation, in input units (pixels), that a fitted line may have from the points it represents. Roughly, `tolerance ≈ epsilon / √2`, where `epsilon` is what you'd pass to Ramer–Douglas–Peucker — RDP's `epsilon` bounds the max (L∞) deviation, while `tolerance` bounds the L2 deviation.\
 **rule of thumb:** `tolerance ≈ max(1.0, jitter_amp)`, where `jitter_amp` how noisy the segmentation is - the standard deviation of how far the mask's boundary randomly wanders from its true edge.
 The `1.0` floor covers ordinary pixel-quantization jitter present even in a "clean" mask.
 
-**segment_cost** (default `2`): the cost of one segment, in units of `tolerance²`. A split, merge or junction move is kept only if it lowers the Energy:\
+**`segment_cost`** (default `2`): the cost of one segment, in units of `tolerance²`. A split, merge or junction move is kept only if it lowers the Energy:\
 `Energy = SSE + tolerance² · orphans_count + segment_cost · tolerance² · segments_count`\
 An orphan costs as much as a point at distance `tolerance`. Higher values give fewer segments.
 
-**energy** (default `None`): your own Energy, used instead of the built-in one; `segment_cost` is then not used.
+**`energy`** (default `None`): your own Energy, used instead of the built-in one; `segment_cost` is then not used.
 
 Merges and junction moves then compare the Energy of the whole segmentation.
 With an energy as fast as the built-in one, `fit()` takes about 10% longer.
@@ -113,7 +116,7 @@ def my_energy(segments) -> float:
 fitter = FitterToPointsSequence(FitterConfig(energy=my_energy))
 ```
 
-**rank_split_by_max_deviation** (default `False`)
+**`rank_split_by_max_deviation`** (default `False`)
 Pass True to slightly improve simpler shapes (low segments count, enough space between opposite sides). Can damage complex shapes.
 
 ## Algorithm
@@ -121,11 +124,13 @@ Pass True to slightly improve simpler shapes (low segments count, enough space b
 The input is an ordered sequence of contour points, open or closed. Lines are fitted by total least squares (minimizing perpendicular distances), and the segmentation is refined top-down:
 
 1. **Fit** a single line to the whole sequence.
-2. **Split** the worst-fitting segment at its midpoint — a segment needs splitting when its mean squared deviation exceeds `tolerance²` or any single point lies farther than `tolerance` from its line.
+2. **Split** the worst-fitting segment at its point farthest from its line — a segment needs splitting when its mean squared deviation exceeds `tolerance²` or any single point lies farther than `tolerance` from its line.
 3. **Adjust**: slide each junction between neighboring segments to the cut with the lowest total squared error, re-fitting the segments as points change sides; a point far from both lines may be left orphaned. A move is kept only if it lowers the Energy. Iterate until stable.
 4. **Repeat** 2–3 until the average squared-error sum per segment is within `tolerance²`, a split no longer lowers the Energy, or `max_segments_count` is reached.
 5. **Merge** adjacent segments with similar directions when this lowers the Energy.
 6. **Reconstruct vertices**: each corner is the intersection of the two adjacent fitted lines — sub-pixel accurate even when no input point lies at the true corner.
+
+`refit()` starts from `previous.segments` instead of step 1, and adjusts their junctions first.
 
 To watch these steps, e.g. to draw them, pass `on_step` to `fit()` or `refit()`: it is called after each of steps 1–5.
 
@@ -160,13 +165,13 @@ Notes for the two common contour sources:
 The implementation is optimized, uses NumPy broadcasting.
 
 Benchmarked against RDP (`cv2.approxPolyDP`) on synthetic shapes across noise levels
-([performance_test/](performance_test/)): comparable on most fidelity metrics (IoU, RMS, Hausdorff). But Mask2PolyMin avoids corner-cutting bias — see [corner_bias](performance_test/charts/fig6_corner_bias.png), [corner_bias comparison](performance_test/charts/comparison_corner_bias.png) and perimeter shrinkage in [perimeter_ratio](performance_test/charts/fig8_perimeter.png), [perimeter_ratio comparison](performance_test/charts/comparison_perimeter.png). Tradeoff: Mask2PolyMin is far slower — although not dramatically slow in absolute terms: 12 ms per contour on average, even on a weak laptop (Intel i5-12450H, UHD Graphics), single-threaded — see [wall-clock time](performance_test/charts/fig11_walltime.png).
+([performance_test/](https://github.com/AlexanderHaritonov/Mask2PolyMin/tree/main/performance_test)): comparable on most fidelity metrics (IoU, RMS, Hausdorff). But Mask2PolyMin avoids corner-cutting bias — see [corner_bias](https://github.com/AlexanderHaritonov/Mask2PolyMin/blob/main/performance_test/charts/fig6_corner_bias.png), [corner_bias comparison](https://github.com/AlexanderHaritonov/Mask2PolyMin/blob/main/performance_test/charts/comparison_corner_bias.png) and perimeter shrinkage in [perimeter_ratio](https://github.com/AlexanderHaritonov/Mask2PolyMin/blob/main/performance_test/charts/fig8_perimeter.png), [perimeter_ratio comparison](https://github.com/AlexanderHaritonov/Mask2PolyMin/blob/main/performance_test/charts/comparison_perimeter.png). Tradeoff: Mask2PolyMin is far slower — although not dramatically slow in absolute terms: 12 ms per contour on average, even on a weak laptop (Intel i5-12450H, UHD Graphics), single-threaded — see [wall-clock time](https://github.com/AlexanderHaritonov/Mask2PolyMin/blob/main/performance_test/charts/fig11_walltime.png).
 
 <img src="https://raw.githubusercontent.com/AlexanderHaritonov/Mask2PolyMin/main/docs/collage_noise3_fitted.png" alt="10 synthetic shapes at noise level 3 with fitted polygons" width="800">
 
-10 synthetic shapes ([performance_test/](performance_test/)) at noise level 3, Mask2PolyMin fit in red.
+10 synthetic shapes ([performance_test/](https://github.com/AlexanderHaritonov/Mask2PolyMin/tree/main/performance_test)) at noise level 3, Mask2PolyMin fit in red.
 
-## future work and ideas
+## Future work and ideas
 - explore line fitting with Theil–Sen and respectively the Median or Mean Absolute Error as stop criterion ?
 
 ## Running Tests
