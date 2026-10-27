@@ -86,6 +86,8 @@ result.segments[0].freeze(point=[0, 0.5], direction=[1, 0])  # e.g. the line sha
 polygon, segments, energy = fitter.refit(contour, result, is_closed=True)  # side 0 now lies on y = 0.5
 ```
 
+The whole loop over two neighboring faces, as in the B-rep demo: [`examples/brep/stitch_faces.py`](https://github.com/AlexanderHaritonov/Mask2PolyMin/blob/main/examples/brep/stitch_faces.py).
+
 ## Tuning Parameters
 **max_segments_count** (default `18`): Upper limit on the number of segments in the output polygon. Keeping this bound relatively tight prevents over-fitting to noise and generally improves reconstructed shape accuracy.
 
