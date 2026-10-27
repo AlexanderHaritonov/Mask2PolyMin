@@ -3,7 +3,7 @@
 [![PyPI](https://img.shields.io/pypi/v/mask2polymin.svg)](https://pypi.org/project/mask2polymin/)&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;![Mask2PolyMin logo](https://raw.githubusercontent.com/AlexanderHaritonov/Mask2PolyMin/main/docs/logo.png)
 
 > **Turn noisy segmentation mask contours into clean polygons with a minimal number of segments, whose vertices are reconstructed corners.**
-> **A building block for stitching neighboring polygons into topological maps and B-reps.**
+> **The inner step of an energy minimization that stitches neighboring polygons into topological maps and B-reps.**
 
 ## Quick Start
 
@@ -18,7 +18,11 @@ contour = np.array([[0, 0], [10, 0], [10, 10], [0, 10]], dtype=float)  # replace
 polygon, segments, energy = Fitter().fit(contour)
 ```
 
-## Video Walkthrough
+## Demos
+
+<img src="https://raw.githubusercontent.com/AlexanderHaritonov/Mask2PolyMin/main/docs/brep_demo.gif" alt="two neighboring faces fitted and stitched to share an edge" width="400">
+
+Two neighboring faces fitted and stitched to share an edge.
 
 📹 [Watch `examples/example_house/example_house.py` in action](https://raw.githubusercontent.com/AlexanderHaritonov/Mask2PolyMin/main/docs/house_example_recording.mp4).
 
@@ -27,7 +31,7 @@ polygon, segments, energy = Fitter().fit(contour)
 Useful for post‑processing bitmask segmentation outputs from models such as MaskRCNN or YOLO‑Seg, especially when regular or low‑complexity shapes are required:
 - obtaining simple geometric representations
 - to reconstruct artificial objects that consist of straight edges, sharp corners, and regular geometric properties.
-- use as the inner step of an energy minimization over neighboring faces (topological maps / B-rep) — see [`refit()`](#refit-inner-step-of-an-energy-minimization-over-neighboring-faces)
+- use as the inner step of an energy minimization over neighboring faces (topological maps / B-rep) — see [`refit()`](#energy-minimization-with-refit)
 
 Unlike common point‑thinning algorithms (Ramer–Douglas–Peucker, Visvalingam–Whyatt, Zhang–Suen), this method:
 - minimizes segment count while preserving the raw shape
@@ -60,7 +64,7 @@ python example_usage.py
 - Each segment has its points, `segment.points()`, and its fitted line, `segment.line_segment_params`. `fit_line(points)` fits a line to any points the same way, e.g. to the points of two segments on an edge that neighboring faces share.
 
 
-## `refit()`: inner step of an energy minimization over neighboring faces
+## Energy minimization with `refit()`
 ```python
 def refit(self, points_sequence, previous: FitResult, is_closed: bool = False, *, guard: bool = True) -> FitResult
 ```
