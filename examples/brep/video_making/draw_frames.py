@@ -161,7 +161,7 @@ class DrawingFitter(Fitter):
 
     def draw_result(self, face, result: FitResult):
         self.results[face] = result
-        self.energies[face] = result.energy(self.config)
+        self.energies[face] = result.energy
         self.segment_colors(face, result.segments)
         fig, ax = self.new_frame(f"{face.capitalize()}: resulting polygon")
         self.draw_other_face(ax, face)
@@ -217,7 +217,7 @@ class DrawingFitter(Fitter):
         return colors
 
     def face_energy(self, face, colored: list[tuple[set[int], str]], lines: list[tuple[LineSegmentParams, np.ndarray, str]]) -> float:
-        """As FitResult.energy(): the squared distances of each line's points to it, the face's orphans, its segments in colored."""
+        """As FitResult.energy: the squared distances of each line's points to it, the face's orphans, its segments in colored."""
         sse = sum(float(line.squared_distances_to_line(points).sum()) for line, points, _ in lines)
         orphans_count = len(self.contours[face]) - sum(len(indices) for indices, _ in colored)
         return energy(sse, orphans_count, len(colored), self.config.tolerance, self.config.segment_cost)

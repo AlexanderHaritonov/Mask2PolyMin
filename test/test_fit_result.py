@@ -41,14 +41,15 @@ def junction_gaps(segments, n):
 
 # ---- unpacking ----
 
-def test_fit_returns_fit_result_that_unpacks_as_before():
+def test_fit_returns_fit_result_that_unpacks_as_polygon_segments_energy():
     result = FitterToPointsSequence().fit(square_contour(), is_closed=True)
     assert isinstance(result, FitResult)
 
-    polygon, segments = result
+    polygon, segments, energy = result
     assert polygon is result.polygon
     assert segments is result.segments
-    assert len(result) == 2
+    assert energy == result.energy
+    assert len(result) == 3
 
 
 # ---- sse ----
@@ -56,7 +57,7 @@ def test_fit_returns_fit_result_that_unpacks_as_before():
 def test_sse_against_given_line():
     points = zigzag(6)
     segment = SequenceSegment(points, 0, 5, make_params([0, 0.5], [5, 0.5]))
-    result = FitResult(np.empty((0, 2)), [segment])
+    result = FitResult(np.empty((0, 2)), [segment], np.nan)
 
     # every point is 0.5 off the line y=0.5
     assert result.sse() == pytest.approx(6 * 0.25)
@@ -70,8 +71,8 @@ def test_sse_of_frozen_segment_uses_frozen_line():
     frozen.freeze([0, 0], [1, 0])
 
     # frozen line y=0: the three points at y=1 count 1 each, not the fitted line's 0.25
-    assert FitResult(np.empty((0, 2)), [frozen]).sse() == pytest.approx(3.0)
-    assert FitResult(np.empty((0, 2)), [fitted]).sse() == pytest.approx(6 * 0.25)
+    assert FitResult(np.empty((0, 2)), [frozen], np.nan).sse() == pytest.approx(3.0)
+    assert FitResult(np.empty((0, 2)), [fitted], np.nan).sse() == pytest.approx(6 * 0.25)
 
 
 def test_sse_covers_wrapping_segment():
@@ -79,7 +80,7 @@ def test_sse_covers_wrapping_segment():
     # wraps: indices 6, 7, 0, 1
     wrapping = SequenceSegment(points, 6, 1, make_params([0, 0], [7, 0]))
     inner = SequenceSegment(points, 2, 5, make_params([0, 0], [7, 0]))
-    result = FitResult(np.empty((0, 2)), [inner, wrapping])
+    result = FitResult(np.empty((0, 2)), [inner, wrapping], np.nan)
 
     # odd indices sit at y=1: 3 and 5 in inner, 7 and 1 in wrapping
     assert result.sse() == pytest.approx(4.0)
@@ -103,7 +104,7 @@ def test_orphans_count_of_given_segments():
         SequenceSegment(points, 5, 7, make_params([5, 0], [7, 0])),
     ]
     # index 4 and indices 8, 9 belong to no segment
-    assert FitResult(np.empty((0, 2)), segments).orphans_count() == 3
+    assert FitResult(np.empty((0, 2)), segments, np.nan).orphans_count() == 3
 
 
 def test_orphans_count_after_fit():
@@ -125,14 +126,12 @@ def test_clean_square_has_no_orphans():
 
 def test_energy_adds_sse_orphans_and_segments():
     # tolerance 1.5, so tolerance and tolerance² differ
-    points = zigzag(10)
-    segments = [
-        SequenceSegment(points, 0, 3, make_params([0, 0], [3, 0])),
-        SequenceSegment(points, 5, 7, make_params([5, 0], [7, 0])),
-    ]
-    result = FitResult(np.empty((0, 2)), segments)
-    expected = result.sse() + 1.5 ** 2 * 3 + 15.0 * 1.5 ** 2 * 2
-    assert result.energy(FitterConfig(tolerance=1.5, segment_cost=15.0)) == pytest.approx(expected)
+    config = FitterConfig(tolerance=1.5, segment_cost=2.0)
+    result = FitterToPointsSequence(config).fit(square_contour(corner_displacement=2.5), is_closed=True)
+    assert result.orphans_count() >= 1
+
+    expected = result.sse() + 1.5 ** 2 * result.orphans_count() + 2.0 * 1.5 ** 2 * len(result.segments)
+    assert result.energy == pytest.approx(expected)
 
 
 # ---- SequenceSegment.frozen ----

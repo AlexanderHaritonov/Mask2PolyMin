@@ -2,7 +2,8 @@
 
 [![PyPI](https://img.shields.io/pypi/v/mask2polymin.svg)](https://pypi.org/project/mask2polymin/)&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;![Mask2PolyMin logo](https://raw.githubusercontent.com/AlexanderHaritonov/Mask2PolyMin/main/docs/logo.png)
 
-> **Turn noisy raster segmentation masks into clean polygons with a minimal number of segments, whose vertices are reconstructed corners.**
+> **Turn noisy segmentation mask contours into clean polygons with a minimal number of segments, whose vertices are reconstructed corners.**
+> **A building block for stitching neighboring polygons into topological maps and B-reps.**
 
 ## Quick Start
 
@@ -14,7 +15,7 @@ import numpy as np
 from mask2polymin import FitterToPointsSequence as Fitter
 
 contour = np.array([[0, 0], [10, 0], [10, 10], [0, 10]], dtype=float)  # replace with your dense (N, 2) contour, e.g. from skimage.measure.find_contours
-polygon, segments = Fitter().fit(contour)
+polygon, segments, energy = Fitter().fit(contour)
 ```
 
 ## Video Walkthrough
@@ -55,7 +56,7 @@ python example_usage.py
 
 <img src="https://raw.githubusercontent.com/AlexanderHaritonov/Mask2PolyMin/main/docs/step3_fitted_segments.png" alt="fitted segments" width="300">
 
-- `fit()` returns a `FitResult` that unpacks as `(polygon, segments)`: a closed polygon of float (sub-pixel) vertices, ready for GeoJSON/SVG/COCO export, plus the underlying fitted segments
+- `fit()` returns a `FitResult` that unpacks as `(polygon, segments, energy)`: a closed polygon of float (sub-pixel) vertices, ready for GeoJSON/SVG/COCO export, the underlying fitted segments, and their Energy.
 - Each segment has its points, `segment.points()`, and its fitted line, `segment.line_segment_params`. `fit_line(points)` fits a line to any points the same way, e.g. to the points of two segments on an edge that neighboring faces share.
 
 
@@ -78,7 +79,7 @@ contour = np.concatenate([np.c_[t, 0 * t], np.c_[20 + 0 * t, t], np.c_[20 - t, 2
 fitter = Fitter()
 result = fitter.fit(contour, is_closed=True)
 result.segments[0].freeze(point=[0, 0.5], direction=[1, 0])  # e.g. the line shared with the neighboring face
-polygon, segments = fitter.refit(contour, result, is_closed=True)  # side 0 now lies on y = 0.5
+polygon, segments, energy = fitter.refit(contour, result, is_closed=True)  # side 0 now lies on y = 0.5
 ```
 
 ## Tuning Parameters

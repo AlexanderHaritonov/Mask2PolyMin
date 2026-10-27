@@ -9,21 +9,21 @@ L_SHAPE = [[0, 0], [1, 0], [2, 0], [3, 0], [3, 1], [3, 2], [3, 3]]
 
 
 def test_plain_list_input_is_coerced():
-    polygon, segments = FitterToPointsSequence().fit(L_SHAPE)
+    polygon, segments, _ = FitterToPointsSequence().fit(L_SHAPE)
     assert polygon.dtype == np.float64
     assert len(segments) == 2
 
 
 def test_integer_array_input_is_coerced():
-    polygon, _ = FitterToPointsSequence().fit(np.array(L_SHAPE, dtype=np.int32))
+    polygon, _, _ = FitterToPointsSequence().fit(np.array(L_SHAPE, dtype=np.int32))
     assert polygon.dtype == np.float64
 
 
 def test_cv2_findcontours_shape_is_accepted():
     # cv2.findContours returns (N, 1, 2) int32 arrays; must fit identically to the reshaped (N, 2) equivalent
     cv2_shaped = np.array(L_SHAPE, dtype=np.int32).reshape(-1, 1, 2)
-    polygon_cv2, segments_cv2 = FitterToPointsSequence().fit(cv2_shaped)
-    polygon_plain, segments_plain = FitterToPointsSequence().fit(np.array(L_SHAPE, dtype=np.int32))
+    polygon_cv2, segments_cv2, _ = FitterToPointsSequence().fit(cv2_shaped)
+    polygon_plain, segments_plain, _ = FitterToPointsSequence().fit(np.array(L_SHAPE, dtype=np.int32))
 
     assert polygon_cv2.dtype == np.float64
     assert np.array_equal(polygon_cv2, polygon_plain)

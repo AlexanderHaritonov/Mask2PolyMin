@@ -36,7 +36,7 @@ def measure(record: dict, tolerance: float, apply_margin: bool) -> dict:
     contour = record["contour_xy"]
     config = FitterConfig(tolerance=float(tolerance), apply_local_defect_margin=apply_margin)
     t0 = time.perf_counter()
-    poly, _ = FitterToPointsSequence(config=config).fit(contour, is_closed=True)
+    poly, _, _ = FitterToPointsSequence(config=config).fit(contour, is_closed=True)
     wall_ms = (time.perf_counter() - t0) * 1e3
     recall, precision, loc_err = corner_metrics(record["gt_corners_xy"], poly)
     return {

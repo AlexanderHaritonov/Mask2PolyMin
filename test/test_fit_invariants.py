@@ -44,7 +44,7 @@ def test_closed_fit_returns_freshly_fitted_segments():
         width, height = int(rng.integers(8, 25)), int(rng.integers(8, 25))
         pts = noisy_rectangle(rng, width, height)
         fitter = FitterToPointsSequence(config=FitterConfig(tolerance=1.0))
-        _, segments = fitter.fit(pts, is_closed=True)
+        _, segments, _ = fitter.fit(pts, is_closed=True)
         assert_segments_freshly_fitted(fitter, segments)
 
 
@@ -56,5 +56,5 @@ def test_open_fit_returns_freshly_fitted_segments():
         vertical = np.stack([np.full(n, n - 1.0), np.arange(1, n + 1)], axis=1)
         pts = np.vstack([horizontal, vertical]) + rng.normal(0, 0.3, (2 * n, 2))
         fitter = FitterToPointsSequence(config=FitterConfig(tolerance=1.0))
-        _, segments = fitter.fit(pts, is_closed=False)
+        _, segments, _ = fitter.fit(pts, is_closed=False)
         assert_segments_freshly_fitted(fitter, segments)

@@ -1,15 +1,11 @@
-import dataclasses
 from collections.abc import Hashable
-from typing import TYPE_CHECKING, NamedTuple
+from typing import NamedTuple
 
 import numpy as np
 
-from mask2polymin import energy
+from mask2polymin.energy import orphans_count as segments_orphans_count
 from mask2polymin.sequence_moments import subsequence
 from mask2polymin.sequence_segment import SequenceSegment
-
-if TYPE_CHECKING:
-    from mask2polymin.fit_to_points_sequence import FitterConfig
 
 
 def _current_loss(segment: SequenceSegment) -> float:
@@ -19,9 +15,11 @@ def _current_loss(segment: SequenceSegment) -> float:
 
 
 class FitResult(NamedTuple):
-    """Result of FitterToPointsSequence.fit() and refit(); unpacks as `polygon, segments`."""
+    """Result of FitterToPointsSequence.fit() and refit(); unpacks as `polygon, segments, energy`.
+    energy: the Energy of segments when fit() or refit() returned them; freeze() does not update it."""
     polygon: np.ndarray
     segments: list[SequenceSegment]
+    energy: float
 
     @property
     def frozen(self) -> dict[Hashable, SequenceSegment]:
@@ -30,19 +28,9 @@ class FitResult(NamedTuple):
 
     def orphans_count(self) -> int:
         """Number of contour points assigned to no segment."""
-        return energy.orphans_count(self.segments)
+        return segments_orphans_count(self.segments)
 
     def sse(self) -> float:
         """Sum of squared distances from each segment's points to its current line.
         Orphans are not included."""
         return sum((_current_loss(segment) for segment in self.segments), 0.0)
-
-    def energy(self, config: "FitterConfig") -> float:
-        """Energy of this result: config.energy if given, otherwise the built-in one."""
-        if config.energy is None:
-            return energy.energy(self.sse(), self.orphans_count(), len(self.segments), config.tolerance, config.segment_cost)
-        # freeze() leaves the loss stale, so config.energy gets clones with the loss of their current lines
-        clones = [segment.clone() for segment in self.segments]
-        for clone in clones:
-            clone.line_segment_params = dataclasses.replace(clone.line_segment_params, loss=_current_loss(clone))
-        return config.energy(clones)

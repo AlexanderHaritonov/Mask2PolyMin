@@ -135,9 +135,14 @@ class FitterToPointsSequence:
         segments = self._merge_collinear_segments(segments_sequence)
         result = self._result_with_endpoints(segments)
 
-        if guard and result.energy(self.config) > previous.energy(self.config):
-            if self.config.verbose: print("refit() raised Energy; returning the start segmentation.")
-            return self._result_with_endpoints(self._clones_of(previous.segments))
+        if guard:
+            # previous.energy is stale if a segment was frozen since, so the start's loss is computed again, from the moments
+            start = self._clones_of(previous.segments)
+            for segment in start:
+                refit_segment(self._moments, segment, with_endpoints=False)
+            if result.energy > self._energy(start):
+                if self.config.verbose: print("refit() raised Energy; returning the start segmentation.")
+                return self._result_with_endpoints(start)
         return result
 
     def _clones_of(self, segments: list[SequenceSegment]) -> list[SequenceSegment]:
@@ -154,7 +159,7 @@ class FitterToPointsSequence:
         for segment in segments:
             refit_segment(self._moments, segment, with_endpoints=True)
         polygon = segments_to_polyline(segments, is_closed=self.is_closed, tolerance=self.config.tolerance)
-        return FitResult(polygon, segments)
+        return FitResult(polygon, segments, self._energy(segments))
 
     def _prepare(self, points_sequence: np.ndarray, is_closed: bool = False) -> None:
         """Validate and normalize points_sequence, then set up whole_sequence/is_closed/_moments for fitting."""

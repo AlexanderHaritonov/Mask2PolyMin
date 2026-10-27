@@ -27,7 +27,7 @@ def run_example():
 
     # approximate the contour with mask2polymin
     fitter = Fitter(FitterConfig(plot_intermediate_steps=True))
-    polygon, segments = fitter.fit(points_sequence=contour, is_closed=True)
+    polygon, segments, _ = fitter.fit(points_sequence=contour, is_closed=True)
     plot_segments_colored(mask, contour, segments)
 
     plot_enlarged_with_polygon(mask, contour, segments, polygon, scale=8)

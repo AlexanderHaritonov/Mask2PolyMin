@@ -127,7 +127,7 @@ def test_merge_reports_the_merged_segment(ranges, merged, index):
     # The junctions sit on the corners, so they don't move.
     points = square_contour(10)
     steps = []
-    FitterToPointsSequence().refit(points, FitResult(np.empty((0, 2)), segments_from_ranges(points, ranges)), is_closed=True,
+    FitterToPointsSequence().refit(points, FitResult(np.empty((0, 2)), segments_from_ranges(points, ranges), np.nan), is_closed=True,
                                    on_step=recorder(steps))
 
     assert steps == [("start", ranges, None), ("merge", merged, index)]

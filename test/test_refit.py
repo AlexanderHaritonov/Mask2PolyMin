@@ -3,6 +3,7 @@ import numpy as np
 import pytest
 
 from mask2polymin import FitResult
+from mask2polymin.energy import energy as built_in_energy
 from mask2polymin.fit_to_points_sequence import FitterToPointsSequence, FitterConfig
 from mask2polymin.sequence_moments import SequenceMoments, fit_range, refit_segment, subsequence
 from mask2polymin.sequence_segment import SequenceSegment
@@ -97,7 +98,7 @@ def test_refit_length_check_ignores_closing_duplicate():
 
 def test_refit_leaves_previous_intact():
     points = square_contour(8)
-    previous = FitResult(np.empty((0, 2)), misplaced_junctions(points, side=8, shift=3))
+    previous = FitResult(np.empty((0, 2)), misplaced_junctions(points, side=8, shift=3), np.nan)
     snapshot = [(s.first_index, s.last_index, s.line_segment_params, s.whole_sequence) for s in previous.segments]
 
     same_points = points.copy()
@@ -135,7 +136,7 @@ def test_refit_from_misplaced_junctions_is_not_worse_than_fit(side):
     # shift 3 puts the start out of tolerance, so the split loop runs.
     # With shift 2 the start is within tolerance and comes back unchanged: junctions move only after a split.
     points = square_contour(side)
-    previous = FitResult(np.empty((0, 2)), misplaced_junctions(points, side, shift=3))
+    previous = FitResult(np.empty((0, 2)), misplaced_junctions(points, side, shift=3), np.nan)
     fitter = FitterToPointsSequence(config=FitterConfig(tolerance=1.0))
 
     fitted = fitter.fit(points, is_closed=True)
@@ -363,7 +364,7 @@ def test_refit_with_everything_frozen_keeps_segments_and_lines():
     frozen_lines = [s.line_segment_params for s in segments]
 
     result = FitterToPointsSequence(config=FitterConfig(tolerance=1.0)).refit(
-        points, FitResult(np.empty((0, 2)), segments), is_closed=True)
+        points, FitResult(np.empty((0, 2)), segments, np.nan), is_closed=True)
 
     assert all(s.frozen for s in result.segments)
     assert [matching_line_index(s.line_segment_params, frozen_lines) for s in result.segments] == [0, 1, 2, 3, 4]
@@ -382,7 +383,7 @@ def test_refit_never_splits_or_merges_frozen_segments_and_keeps_their_order():
     frozen_lines = [s.line_segment_params for s in segments if s.frozen]
 
     result = FitterToPointsSequence(config=FitterConfig(tolerance=1.0)).refit(
-        points, FitResult(np.empty((0, 2)), segments), is_closed=True)
+        points, FitResult(np.empty((0, 2)), segments, np.nan), is_closed=True)
 
     order = [matching_line_index(s.line_segment_params, frozen_lines) for s in result.segments if s.frozen]
     assert order in ([0, 1, 2], [1, 2, 0], [2, 0, 1])  # the same cyclic order
@@ -416,7 +417,7 @@ def test_junction_between_two_frozen_segments_does_not_move(second_point, second
     segments[1].freeze(second_point, second_direction)
 
     result = FitterToPointsSequence(config=FitterConfig(tolerance=1.0)).refit(
-        points, FitResult(np.empty((0, 2)), segments), is_closed=True)
+        points, FitResult(np.empty((0, 2)), segments, np.nan), is_closed=True)
 
     [first, second] = [s for s in result.segments if s.frozen]
     assert (first.last_index, second.first_index) == (9, 10)
@@ -436,7 +437,7 @@ def test_refit_keeps_the_key_of_a_frozen_segment_wherever_it_moves(ranges, froze
     segments[frozen_index].freeze([0.0, 10.0], [1.0, 0.0], key="edge")
     fitter = FitterToPointsSequence(config=FitterConfig(tolerance=1.0))
 
-    result = fitter.refit(points, FitResult(np.empty((0, 2)), segments), is_closed=True)
+    result = fitter.refit(points, FitResult(np.empty((0, 2)), segments, np.nan), is_closed=True)
     edge = result.frozen["edge"]
     assert edge is result.segments[expected_index]
     assert edge.line_segment_params.start_point[1] == pytest.approx(10.0)  # still on y = 10; its junctions may move
@@ -451,7 +452,7 @@ def test_frozen_holds_only_the_frozen_segments_with_a_key():
     segments[2].freeze([0.0, 10.0], [1.0, 0.0], key=("left", "right"))
     segments[3].key = "free"
 
-    assert FitResult(np.empty((0, 2)), segments).frozen == {("left", "right"): segments[2]}
+    assert FitResult(np.empty((0, 2)), segments, np.nan).frozen == {("left", "right"): segments[2]}
 
 
 def test_freeze_again_without_key_keeps_the_key():
@@ -469,7 +470,7 @@ def test_refit_with_two_frozen_segments_of_the_same_key_raises():
     segments[0].freeze([0.0, 0.0], [1.0, 0.0], key="edge")
     segments[2].freeze([0.0, 10.0], [1.0, 0.0], key="edge")
     with pytest.raises(ValueError, match="unique"):
-        FitterToPointsSequence().refit(points, FitResult(np.empty((0, 2)), segments), is_closed=True)
+        FitterToPointsSequence().refit(points, FitResult(np.empty((0, 2)), segments, np.nan), is_closed=True)
 
 
 def test_guard_keeps_the_key_when_it_returns_the_start(monkeypatch):
@@ -487,7 +488,8 @@ def test_guard_keeps_the_key_when_it_returns_the_start(monkeypatch):
 # ---- guard ----
 
 def energy(result, config):
-    return result.energy(config)
+    """the built-in Energy, with the loss of the current lines: result.energy is stale after freeze()"""
+    return built_in_energy(result.sse(), result.orphans_count(), len(result.segments), config.tolerance, config.segment_cost)
 
 
 @pytest.mark.parametrize("guard", [True, False])
@@ -508,6 +510,7 @@ def test_refit_never_raises_the_energy(seed, is_closed, frozen_shift, guard):
 
     result = fitter.refit(points, previous, is_closed=is_closed, guard=guard)
     assert energy(result, config) <= energy(previous, config) + 1e-9
+    assert result.energy == pytest.approx(energy(result, config))
 
 
 def test_guard_returns_the_start_when_refit_raises_the_energy(monkeypatch):
@@ -546,7 +549,7 @@ def noisy_fit_with_frozen_lines(seed, is_closed, frozen_shift):
 
 
 def segments_energy(segments, config):
-    return energy(FitResult(np.empty((0, 2)), segments), config)
+    return energy(FitResult(np.empty((0, 2)), segments, np.nan), config)
 
 
 @pytest.mark.parametrize("frozen_shift", [None, 0.5])

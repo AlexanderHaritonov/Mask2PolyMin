@@ -87,7 +87,7 @@ def fit_polygon(contour, verbose=False):
     )
 
     # Fit line segments to the contour
-    _polygon, segments = fitter.fit(contour, is_closed=True)
+    _polygon, segments, _energy = fitter.fit(contour, is_closed=True)
 
     end_time = time.perf_counter()
     elapsed_time = end_time - start_time

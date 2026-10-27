@@ -128,7 +128,7 @@ def vertex_errors(segments):
 def test_displaced_corners_end_to_end():
     pts = square_contour(corner_displacement=1.5)
     fitter = FitterToPointsSequence(config=FitterConfig(tolerance=1.0))
-    _, segments = fitter.fit(pts, is_closed=True)
+    _, segments, _ = fitter.fit(pts, is_closed=True)
 
     assert len(segments) == 4
     gaps = junction_gaps(segments, len(fitter.whole_sequence))
@@ -141,7 +141,7 @@ def test_displaced_corners_strict():
     # E keeps one corner in its segment: there it adds 0.39 to the SSE, an orphan costs 1.0.
     pts = square_contour(corner_displacement=1.5)
     fitter = FitterToPointsSequence(config=FitterConfig(tolerance=1.0))
-    _, segments = fitter.fit(pts, is_closed=True)
+    _, segments, _ = fitter.fit(pts, is_closed=True)
 
     assert len(segments) == 4
     gaps = junction_gaps(segments, len(fitter.whole_sequence))
@@ -154,7 +154,7 @@ def test_displaced_corners_strict():
 def test_clean_square_has_no_orphans():
     pts = square_contour(corner_displacement=0.0)
     fitter = FitterToPointsSequence(config=FitterConfig(tolerance=1.0))
-    _, segments = fitter.fit(pts, is_closed=True)
+    _, segments, _ = fitter.fit(pts, is_closed=True)
 
     assert len(segments) == 4
     assert all(g == 0 for g in junction_gaps(segments, len(fitter.whole_sequence)))

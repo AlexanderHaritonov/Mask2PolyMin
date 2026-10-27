@@ -93,11 +93,17 @@ def test_own_energy_decides_the_splits():
     assert len(result.segments) == 1
 
 
-def test_result_energy_uses_own_energy_with_the_loss_of_the_current_lines():
+def test_result_energy_is_own_energy_with_the_loss_of_the_current_lines():
     config = FitterConfig()
-    result = FitterToPointsSequence(config).fit(square_contour(10), is_closed=True)
-    freeze_shifted(result.segments[0], 0.5)  # its loss is stale now
-    assert result.energy(FitterConfig(energy=built_in_energy(config))) == pytest.approx(result.energy(config))
+    fitter = FitterToPointsSequence(FitterConfig(energy=built_in_energy(config)))
+    previous = fitter.fit(square_contour(10), is_closed=True)
+    freeze_shifted(previous.segments[0], 0.5)  # its loss is stale now
+
+    # the frozen segment stays in the result, with the loss of its frozen line
+    result = fitter.refit(square_contour(10), previous, is_closed=True, guard=False)
+    assert any(segment.frozen for segment in result.segments)
+    expected = energy(result.sse(), result.orphans_count(), len(result.segments), config.tolerance, config.segment_cost)
+    assert result.energy == pytest.approx(expected)
 
 
 @pytest.mark.parametrize("sign", [1, -1])

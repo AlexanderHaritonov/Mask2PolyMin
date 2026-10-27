@@ -13,7 +13,7 @@ bitmap[30:50, 50:80] = 1
 contour = measure.find_contours(bitmap, level=0.5)[0]
 
 """ fit a closed polygon """
-polygon, segments = FitterToPointsSequence().fit(contour, is_closed=True)
+polygon, segments, _ = FitterToPointsSequence().fit(contour, is_closed=True)
 print(f"polygon with {len(polygon) - 1} vertices:")
 print(np.round(polygon, 2))
 

@@ -26,7 +26,6 @@ def stitch_faces():
     segment_on_left = left.segments[3]
     segment_on_right = right.segments[1]
 
-    config = fitter.config
     energy = np.inf
     drop = np.inf
     while drop > EPSILON:
@@ -41,7 +40,7 @@ def stitch_faces():
         segment_on_left = left.frozen["shared"]
         segment_on_right = right.frozen["shared"]
 
-        new_energy = left.energy(config) + right.energy(config)
+        new_energy = left.energy + right.energy
         drop = energy - new_energy
         energy = new_energy
 
