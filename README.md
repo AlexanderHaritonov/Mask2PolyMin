@@ -3,6 +3,7 @@
 [![PyPI](https://img.shields.io/pypi/v/mask2polymin.svg)](https://pypi.org/project/mask2polymin/)&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;![Mask2PolyMin logo](https://raw.githubusercontent.com/AlexanderHaritonov/Mask2PolyMin/main/docs/logo.png)
 
 > **Turn noisy segmentation mask contours into clean polygons with a minimal number of segments, whose vertices are reconstructed corners.**
+> 
 > **The inner step of an energy minimization that stitches neighboring polygons into topological maps and B-reps.**
 
 ## Quick Start
